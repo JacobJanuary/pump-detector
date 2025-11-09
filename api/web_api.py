@@ -19,6 +19,8 @@ import sys
 import os
 import json
 from pathlib import Path
+import requests
+from time import time
 
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -86,7 +88,7 @@ def candidate_details(symbol):
     try:
         conn = get_db_connection()
         with conn.cursor() as cur:
-            # Get candidate info with market cap and CMC rank
+            # Get candidate info with market cap, CMC rank and slug
             cur.execute("""
                 SELECT
                     pc.pair_symbol,
@@ -104,7 +106,8 @@ def candidate_details(symbol):
                     pc.status,
                     c.market_cap,
                     c.cmc_rank,
-                    c.cmc_token_id
+                    c.cmc_token_id,
+                    c.slug
                 FROM pump.pump_candidates pc
                 LEFT JOIN public.trading_pairs tp ON pc.trading_pair_id = tp.id
                 LEFT JOIN public.tokens t ON tp.token_id = t.id
@@ -156,137 +159,167 @@ def candidate_details(symbol):
 
         conn.close()
 
-        # Simple HTML page with candidate details
+        # 2-column HTML page with candidate details and charts
         html = f"""
 <!DOCTYPE html>
 <html>
 <head>
     <title>{symbol} - Candidate Details</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
-        body {{ font-family: Arial; max-width: 1400px; margin: 50px auto; padding: 20px; }}
-        h1 {{ color: #1e3c72; }}
-        h2 {{ color: #2a5298; margin-top: 30px; }}
-        .detail {{ margin: 15px 0; padding: 10px; background: #f5f5f5; border-radius: 5px; }}
-        .label {{ font-weight: bold; color: #555; }}
-        .value {{ color: #333; }}
-        .badge {{ padding: 5px 15px; border-radius: 15px; color: white; display: inline-block; }}
+        body {{ font-family: Arial; margin: 0; padding: 20px; background: #f0f2f5; }}
+        h1 {{ color: #1e3c72; margin-bottom: 20px; }}
+        .container {{ display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 1600px; margin: 0 auto; }}
+
+        /* Left panel - Info */
+        .info-panel {{ background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }}
+        .detail {{ margin: 8px 0; padding: 8px; background: #f5f5f5; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; }}
+        .label {{ font-weight: 600; color: #555; font-size: 0.9em; }}
+        .value {{ color: #333; font-size: 0.9em; }}
+        .badge {{ padding: 4px 12px; border-radius: 12px; color: white; font-size: 0.85em; font-weight: 600; }}
         .high {{ background: #4CAF50; }}
         .medium {{ background: #FF9800; }}
         .actionable {{ background: #2196F3; }}
-        .back {{ display: inline-block; margin-top: 20px; padding: 10px 20px; background: #1e3c72; color: white; text-decoration: none; border-radius: 5px; }}
 
-        .signals-table {{ width: 100%; border-collapse: collapse; margin-top: 20px; background: white; }}
-        .signals-table th {{ background: #1e3c72; color: white; padding: 12px; text-align: left; font-weight: 600; }}
-        .signals-table td {{ padding: 10px; border-bottom: 1px solid #ddd; }}
+        /* Right panel - Charts */
+        .charts-panel {{ background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }}
+        .chart-container {{ margin-bottom: 30px; height: 300px; position: relative; }}
+        .chart-title {{ font-size: 1.1em; font-weight: 600; color: #1e3c72; margin-bottom: 10px; }}
+
+        .back {{ display: inline-block; margin-top: 20px; padding: 10px 20px; background: #1e3c72; color: white; text-decoration: none; border-radius: 5px; }}
+        .back:hover {{ background: #2a5298; }}
+
+        /* Signals table */
+        .signals-section {{ grid-column: 1 / -1; background: white; padding: 20px; border-radius: 8px; margin-top: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }}
+        .signals-table {{ width: 100%; border-collapse: collapse; margin-top: 15px; }}
+        .signals-table th {{ background: #1e3c72; color: white; padding: 10px; text-align: left; font-size: 0.9em; }}
+        .signals-table td {{ padding: 8px; border-bottom: 1px solid #ddd; font-size: 0.85em; }}
         .signals-table tr:hover {{ background: #f5f5f5; }}
-        .signal-type {{ display: inline-block; padding: 4px 10px; border-radius: 10px; font-size: 0.85em; font-weight: 600; }}
+        .signal-type {{ padding: 3px 8px; border-radius: 8px; font-size: 0.8em; font-weight: 600; }}
         .type-spot {{ background: #4CAF50; color: white; }}
         .type-futures {{ background: #2196F3; color: white; }}
-        .strength {{ display: inline-block; padding: 4px 10px; border-radius: 10px; font-size: 0.85em; font-weight: 600; }}
+        .strength {{ padding: 3px 8px; border-radius: 8px; font-size: 0.8em; font-weight: 600; }}
         .strength-extreme {{ background: #f44336; color: white; }}
         .strength-very-strong {{ background: #FF9800; color: white; }}
         .strength-strong {{ background: #FFC107; color: #333; }}
         .strength-medium {{ background: #9E9E9E; color: white; }}
         .spike-high {{ color: #f44336; font-weight: bold; }}
         .spike-medium {{ color: #FF9800; font-weight: bold; }}
-        .baseline-info {{ color: #666; font-size: 0.9em; }}
+        .baseline-info {{ color: #666; }}
     </style>
 </head>
 <body>
-    <h1>{symbol} - Pump Candidate Details</h1>
+    <h1><a href="/" style="text-decoration: none; color: #666; font-size: 0.8em; margin-right: 10px;">←</a>{symbol} - Pump Candidate Details</h1>
 
-    <div class="detail">
-        <span class="label">Confidence:</span>
-        <span class="badge {candidate['confidence'].lower()}">{candidate['confidence']}</span>
+    <div class="container">
+        <!-- Left panel: Candidate info -->
+        <div class="info-panel">
+            <h2 style="margin-top: 0; color: #1e3c72; font-size: 1.3em;">Candidate Information</h2>
+
+            <div class="detail">
+                <span class="label">Confidence:</span>
+                <span class="badge {candidate['confidence'].lower()}">{candidate['confidence']}</span>
+            </div>
+
+            <div class="detail">
+                <span class="label">Score:</span>
+                <span class="value">{candidate['score']:.2f}</span>
+            </div>
+
+            <div class="detail">
+                <span class="label">Pattern Type:</span>
+                <span class="value">{candidate['pattern_type']}</span>
+            </div>
+
+            <div class="detail">
+                <span class="label">Status:</span>
+                <span class="badge {'actionable' if candidate['is_actionable'] else ''}">{
+                    'ACTIONABLE - Ready' if candidate['is_actionable'] else 'Watch Only'
+                }</span>
+            </div>
+
+            <div class="detail">
+                <span class="label">Total Signals:</span>
+                <span class="value">{candidate['total_signals']}</span>
+            </div>
+
+            <div class="detail">
+                <span class="label">Extreme Signals:</span>
+                <span class="value">{candidate['extreme_signals']}</span>
+            </div>
+
+            <div class="detail">
+                <span class="label">Critical Window:</span>
+                <span class="value">{candidate['critical_window_signals']}</span>
+            </div>
+
+            <div class="detail">
+                <span class="label">ETA:</span>
+                <span class="value">{candidate['eta_hours']}h</span>
+            </div>
+
+            <div class="detail">
+                <span class="label">Market Cap:</span>
+                <span class="value">{'$' + f"{candidate['market_cap']:,.0f}" if candidate.get('market_cap') else "N/A"}</span>
+            </div>
+
+            <div class="detail">
+                <span class="label">CMC Rank:</span>
+                <span class="value">{'#' + str(candidate['cmc_rank']) if candidate.get('cmc_rank') else "N/A"}</span>
+            </div>
+
+            <div class="detail">
+                <span class="label">CoinMarketCap:</span>
+                <span class="value">
+                    {'<a href="https://coinmarketcap.com/currencies/' + candidate['slug'] + '/" target="_blank" style="color: #2196F3; text-decoration: none;">View →</a>' if candidate.get('slug') else 'N/A'}
+                </span>
+            </div>
+
+            <div class="detail">
+                <span class="label">Pattern Time:</span>
+                <span class="value" style="font-size: 0.8em;">{pattern_info['pattern_start'].strftime('%Y-%m-%d %H:%M') if pattern_info['pattern_start'] else 'N/A'}</span>
+            </div>
+
+            <div class="detail">
+                <span class="label">Last Updated:</span>
+                <span class="value" style="font-size: 0.8em;">{candidate['last_updated_at'].strftime('%Y-%m-%d %H:%M') if candidate.get('last_updated_at') else 'N/A'}</span>
+            </div>
+        </div>
+
+        <!-- Right panel: Charts -->
+        <div class="charts-panel">
+            <div class="chart-title">Price (Last 30 Days - Hourly)</div>
+            <div class="chart-container">
+                <canvas id="priceChart"></canvas>
+            </div>
+
+            <div class="chart-title" style="margin-top: 40px;">Volume (Last 30 Days - Hourly)</div>
+            <div class="chart-container">
+                <canvas id="volumeChart"></canvas>
+            </div>
+        </div>
     </div>
 
-    <div class="detail">
-        <span class="label">Score:</span>
-        <span class="value">{candidate['score']:.2f}</span>
-    </div>
-
-    <div class="detail">
-        <span class="label">Pattern Type:</span>
-        <span class="value">{candidate['pattern_type']}</span>
-    </div>
-
-    <div class="detail">
-        <span class="label">Status:</span>
-        <span class="badge {'actionable' if candidate['is_actionable'] else ''}">{
-            'ACTIONABLE - Ready to Trade' if candidate['is_actionable'] else 'Watch Only'
-        }</span>
-    </div>
-
-    <div class="detail">
-        <span class="label">Total Signals:</span>
-        <span class="value">{candidate['total_signals']}</span>
-    </div>
-
-    <div class="detail">
-        <span class="label">Extreme Signals:</span>
-        <span class="value">{candidate['extreme_signals']}</span>
-    </div>
-
-    <div class="detail">
-        <span class="label">Critical Window Signals:</span>
-        <span class="value">{candidate['critical_window_signals']}</span>
-    </div>
-
-    <div class="detail">
-        <span class="label">ETA:</span>
-        <span class="value">{candidate['eta_hours']}h</span>
-    </div>
-
-    <div class="detail">
-        <span class="label">Pattern Time Range:</span>
-        <span class="value">{pattern_info['pattern_start']} - {pattern_info['pattern_end']}</span>
-    </div>
-
-    <div class="detail">
-        <span class="label">Signals in Pattern:</span>
-        <span class="value">{pattern_info['signal_count']} signals from market data</span>
-    </div>
-
-    <div class="detail">
-        <span class="label">Last Updated:</span>
-        <span class="value">{candidate['last_updated_at']}</span>
-    </div>
-
-    <div class="detail">
-        <span class="label">Market Cap:</span>
-        <span class="value">{'$' + f"{candidate['market_cap']:,.0f}" if candidate.get('market_cap') else "N/A"}</span>
-    </div>
-
-    <div class="detail">
-        <span class="label">CMC Rank:</span>
-        <span class="value">{'#' + str(candidate['cmc_rank']) if candidate.get('cmc_rank') else "N/A"}</span>
-    </div>
-
-    <div class="detail">
-        <span class="label">CoinMarketCap:</span>
-        <span class="value">
-            <a href="https://coinmarketcap.com/currencies/{symbol.replace("USDT", "").lower()}/" target="_blank" style="color: #2196F3;">View on CMC →</a>
-        </span>
-    </div>
-
-    <h2>Все сигналы по паре {symbol}</h2>
-    <table class="signals-table">
-        <thead>
-            <tr>
-                <th>Дата/Время</th>
-                <th>Тип</th>
-                <th>Сила</th>
-                <th>Объем</th>
-                <th>Цена</th>
-                <th>Baseline 7d</th>
-                <th>Baseline 14d</th>
-                <th>Baseline 30d</th>
-                <th>Spike 7d</th>
-                <th>Spike 14d</th>
-                <th>Spike 30d</th>
-            </tr>
-        </thead>
-        <tbody>
+    <!-- Signals table (full width) -->
+    <div class="signals-section">
+        <h2 style="margin-top: 0; color: #1e3c72;">All Signals for {symbol}</h2>
+        <table class="signals-table">
+            <thead>
+                <tr>
+                    <th>Date/Time</th>
+                    <th>Type</th>
+                    <th>Strength</th>
+                    <th>Volume</th>
+                    <th>Price</th>
+                    <th>Baseline 7d</th>
+                    <th>Baseline 14d</th>
+                    <th>Baseline 30d</th>
+                    <th>Spike 7d</th>
+                    <th>Spike 14d</th>
+                    <th>Spike 30d</th>
+                </tr>
+            </thead>
+            <tbody>
 """
 
         # Generate table rows
@@ -340,11 +373,154 @@ def candidate_details(symbol):
             </tr>
             '''
 
-        html += """
-        </tbody>
-    </table>
+        html += f"""
+            </tbody>
+        </table>
+    </div>
 
     <a href="/" class="back">← Back to Dashboard</a>
+
+    <script>
+    // Fetch Binance klines and render charts
+    async function loadCharts() {{
+        try {{
+            const response = await fetch('/api/v2/binance/klines/{symbol}?interval=1h&limit=720');
+            const data = await response.json();
+
+            if (!data.success) {{
+                console.error('Failed to load Binance data:', data.error);
+                return;
+            }}
+
+            const candles = data.candles;
+            const labels = candles.map(c => {{
+                const date = new Date(c.timestamp);
+                return date.toLocaleDateString('en-US', {{ month: 'short', day: 'numeric' }});
+            }});
+            const prices = candles.map(c => c.close);
+            const volumes = candles.map(c => c.quote_volume);
+
+            // Price Chart
+            const priceCtx = document.getElementById('priceChart').getContext('2d');
+            new Chart(priceCtx, {{
+                type: 'line',
+                data: {{
+                    labels: labels,
+                    datasets: [{{
+                        label: 'Price (USDT)',
+                        data: prices,
+                        borderColor: '#2196F3',
+                        backgroundColor: 'rgba(33, 150, 243, 0.1)',
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        tension: 0.1,
+                        fill: true
+                    }}]
+                }},
+                options: {{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {{
+                        legend: {{
+                            display: true,
+                            position: 'top'
+                        }},
+                        tooltip: {{
+                            mode: 'index',
+                            intersect: false
+                        }}
+                    }},
+                    scales: {{
+                        x: {{
+                            grid: {{
+                                display: false
+                            }},
+                            ticks: {{
+                                maxTicksLimit: 15
+                            }}
+                        }},
+                        y: {{
+                            grid: {{
+                                color: '#e0e0e0'
+                            }},
+                            ticks: {{
+                                callback: function(value) {{
+                                    return '$' + value.toFixed(2);
+                                }}
+                            }}
+                        }}
+                    }}
+                }}
+            }});
+
+            // Volume Chart
+            const volumeCtx = document.getElementById('volumeChart').getContext('2d');
+            new Chart(volumeCtx, {{
+                type: 'bar',
+                data: {{
+                    labels: labels,
+                    datasets: [{{
+                        label: 'Volume (USDT)',
+                        data: volumes,
+                        backgroundColor: 'rgba(76, 175, 80, 0.6)',
+                        borderColor: '#4CAF50',
+                        borderWidth: 1
+                    }}]
+                }},
+                options: {{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {{
+                        legend: {{
+                            display: true,
+                            position: 'top'
+                        }},
+                        tooltip: {{
+                            mode: 'index',
+                            intersect: false,
+                            callbacks: {{
+                                label: function(context) {{
+                                    let label = context.dataset.label || '';
+                                    if (label) {{
+                                        label += ': ';
+                                    }}
+                                    label += '$' + context.parsed.y.toLocaleString();
+                                    return label;
+                                }}
+                            }}
+                        }}
+                    }},
+                    scales: {{
+                        x: {{
+                            grid: {{
+                                display: false
+                            }},
+                            ticks: {{
+                                maxTicksLimit: 15
+                            }}
+                        }},
+                        y: {{
+                            grid: {{
+                                color: '#e0e0e0'
+                            }},
+                            ticks: {{
+                                callback: function(value) {{
+                                    return '$' + (value / 1000000).toFixed(1) + 'M';
+                                }}
+                            }}
+                        }}
+                    }}
+                }}
+            }});
+
+        }} catch (error) {{
+            console.error('Error loading charts:', error);
+        }}
+    }}
+
+    // Load charts on page load
+    document.addEventListener('DOMContentLoaded', loadCharts);
+    </script>
 </body>
 </html>
 """
@@ -1051,6 +1227,79 @@ def health_check():
             'status': 'unhealthy',
             'error': str(e),
             'timestamp': datetime.now().isoformat()
+        }), 500
+
+# =============================================================================
+# BINANCE API PROXY
+# =============================================================================
+
+@app.route('/api/v2/binance/klines/<symbol>', methods=['GET'])
+def get_binance_klines(symbol):
+    """
+    Fetch historical kline data from Binance API
+
+    Query Parameters:
+    - interval: Kline interval (default: 1h)
+    - limit: Number of candles (default: 720 = 30 days of hourly candles)
+
+    Returns:
+    - List of OHLCV candles with timestamps
+    """
+    try:
+        symbol = symbol.upper()
+        interval = request.args.get('interval', '1h')
+        limit = int(request.args.get('limit', 720))  # 30 days * 24 hours
+
+        # Binance API endpoint
+        url = 'https://api.binance.com/api/v3/klines'
+        params = {
+            'symbol': symbol,
+            'interval': interval,
+            'limit': min(limit, 1000)  # Binance max is 1000
+        }
+
+        response = requests.get(url, params=params, timeout=10)
+
+        if response.status_code != 200:
+            return jsonify({
+                'success': False,
+                'error': f'Binance API error: {response.status_code}'
+            }), response.status_code
+
+        klines = response.json()
+
+        # Format candles for frontend
+        candles = []
+        for k in klines:
+            candles.append({
+                'timestamp': k[0],  # Open time
+                'open': float(k[1]),
+                'high': float(k[2]),
+                'low': float(k[3]),
+                'close': float(k[4]),
+                'volume': float(k[5]),
+                'quote_volume': float(k[7])
+            })
+
+        return jsonify({
+            'success': True,
+            'symbol': symbol,
+            'interval': interval,
+            'count': len(candles),
+            'candles': candles
+        })
+
+    except requests.RequestException as e:
+        app.logger.error(f"Binance API request failed: {e}")
+        return jsonify({
+            'success': False,
+            'error': f'Binance API request failed: {str(e)}'
+        }), 500
+    except Exception as e:
+        app.logger.error(f"Error fetching Binance klines: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
         }), 500
 
 # =============================================================================
