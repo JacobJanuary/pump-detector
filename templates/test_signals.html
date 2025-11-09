@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Signals - No Cache</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background: #1a1a1a; color: #c9d1d9; padding: 20px; }
+        .card { background: #0d1117; border: 1px solid #30363d; }
+    </style>
+</head>
+<body>
+    <h1>Test Signals Page</h1>
+    <div id="signals"></div>
+
+    <script>
+    // Inline code to avoid cache issues
+    const API_URL = '/api/v1';
+    const API_KEY = 'c94525f138d5be1c2bc70ca407895cef8ae2baf5d3db3fc2b01097e5f1fc9615';
+
+    async function loadSignals() {
+        try {
+            const response = await fetch(`${API_URL}/signals/active`, {
+                headers: { 'X-API-Key': API_KEY },
+                cache: 'no-cache'
+            });
+            const data = await response.json();
+            const signals = data.signals || [];
+
+            const html = signals.map(signal => {
+                // Ensure all numeric values are properly parsed
+                const spike7d = parseFloat(signal.futures_spike_ratio_7d || 0);
+                const spike14d = parseFloat(signal.futures_spike_ratio_14d || 0);
+                const maxGain = parseFloat(signal.max_price_increase || 0);
+                const confidence = signal.initial_confidence || signal.total_score || 0;
+
+                return `
+                    <div class="card mb-3">
+                        <div class="card-body">
+                            <h5>${signal.pair_symbol}</h5>
+                            <p>7D Spike: ${spike7d.toFixed(2)}x</p>
+                            <p>14D Spike: ${spike14d.toFixed(2)}x</p>
+                            <p>Confidence: ${confidence}%</p>
+                            <p>Max Gain: ${maxGain.toFixed(2)}%</p>
+                            <p>Status: ${signal.status}</p>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            document.getElementById('signals').innerHTML = html || '<p>No signals found</p>';
+            console.log('Loaded', signals.length, 'signals');
+
+        } catch (error) {
+            console.error('Error:', error);
+            document.getElementById('signals').innerHTML = `<p class="text-danger">Error: ${error.message}</p>`;
+        }
+    }
+
+    loadSignals();
+    setInterval(loadSignals, 10000);
+    </script>
+</body>
+</html>

@@ -1,0 +1,401 @@
+{% extends "base.html" %}
+
+{% block title %}Active Signals - Pump Detection System{% endblock %}
+
+{% block head %}
+<style>
+    .signal-card {
+        transition: all 0.3s ease;
+    }
+    .signal-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+    }
+    .pulse-animation {
+        animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+        0% { opacity: 1; }
+        50% { opacity: 0.6; }
+        100% { opacity: 1; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h2 class="text-light">
+            <i class="bi bi-bell-fill"></i> Active Signals Monitor
+        </h2>
+        <p class="text-secondary">Real-time monitoring of active pump detection signals</p>
+    </div>
+    <div class="col-auto">
+        <button class="btn btn-primary" onclick="refreshSignals()">
+            <i class="bi bi-arrow-clockwise"></i> Refresh
+        </button>
+        <button class="btn btn-success" onclick="exportSignals()">
+            <i class="bi bi-download"></i> Export
+        </button>
+    </div>
+</div>
+
+<!-- Filter Controls -->
+<div class="card mb-4">
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label text-light">Signal Strength</label>
+                <select class="form-select" id="filter-strength">
+                    <option value="">All Strengths</option>
+                    <option value="EXTREME">EXTREME</option>
+                    <option value="STRONG">STRONG</option>
+                    <option value="MEDIUM">MEDIUM</option>
+                    <option value="WEAK">WEAK</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label text-light">Status</label>
+                <select class="form-select" id="filter-status">
+                    <option value="">All Status</option>
+                    <option value="DETECTED">DETECTED</option>
+                    <option value="MONITORING">MONITORING</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label text-light">Min Confidence</label>
+                <input type="range" class="form-range" id="filter-confidence" min="0" max="100" value="0">
+                <span id="confidence-value">0%</span>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label text-light">Sort By</label>
+                <select class="form-select" id="sort-by">
+                    <option value="time">Time (Latest)</option>
+                    <option value="strength">Signal Strength</option>
+                    <option value="confidence">Confidence</option>
+                    <option value="spike">Spike Ratio</option>
+                </select>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Active Signals Grid -->
+<div class="row" id="signals-grid">
+    <!-- Signal cards will be loaded here -->
+</div>
+
+<!-- Signal Detail Modal -->
+<div class="modal fade" id="signalDetailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Signal Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="signal-detail-content">
+                <!-- Details will be loaded here -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <a href="#" target="_blank" class="btn btn-success" id="binance-link">
+                    <i class="bi bi-box-arrow-up-right"></i> Open on Binance
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Signal monitoring JavaScript
+let activeSignals = [];
+let refreshInterval = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadActiveSignals();
+
+    // Auto-refresh every 10 seconds
+    refreshInterval = setInterval(loadActiveSignals, 10000);
+
+    // Setup filter listeners
+    document.getElementById('filter-strength').addEventListener('change', applyFilters);
+    document.getElementById('filter-status').addEventListener('change', applyFilters);
+    document.getElementById('filter-confidence').addEventListener('input', function() {
+        document.getElementById('confidence-value').textContent = this.value + '%';
+        applyFilters();
+    });
+    document.getElementById('sort-by').addEventListener('change', applyFilters);
+});
+
+async function loadActiveSignals() {
+    try {
+        const data = await fetchAPI('/signals/active');
+        activeSignals = data.signals || [];
+        renderSignals(activeSignals);
+    } catch (error) {
+        console.error('Error loading signals:', error);
+    }
+}
+
+function renderSignals(signals) {
+    const grid = document.getElementById('signals-grid');
+
+    if (!signals || signals.length === 0) {
+        grid.innerHTML = `
+            <div class="col-12 text-center py-5">
+                <i class="bi bi-bell-slash text-muted" style="font-size: 4rem;"></i>
+                <p class="text-muted mt-3">No active signals at the moment</p>
+            </div>
+        `;
+        return;
+    }
+
+    grid.innerHTML = signals.map(signal => createSignalCard(signal)).join('');
+}
+
+function createSignalCard(signal) {
+    const strengthClass = getStrengthClass(signal.signal_strength);
+    const confidence = signal.initial_confidence || signal.total_score || 0;
+    const isUrgent = signal.signal_strength === 'EXTREME' || confidence >= 80;
+
+    return `
+        <div class="col-lg-4 col-md-6 mb-4">
+            <div class="card signal-card ${isUrgent ? 'border-danger pulse-animation' : ''}">
+                <div class="card-header ${strengthClass}">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">${signal.pair_symbol}</h5>
+                        <span class="badge ${strengthClass}">${signal.signal_strength || 'N/A'}</span>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <small class="text-muted">7D Spike</small>
+                            <h4>${parseFloat(signal.futures_spike_ratio_7d || 0).toFixed(1)}x</h4>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted">Confidence</small>
+                            <h4>${confidence}%</h4>
+                            <div class="progress" style="height: 5px;">
+                                <div class="progress-bar ${getConfidenceClass(confidence)}"
+                                     style="width: ${confidence}%"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <small class="text-muted">Detected</small>
+                        <div>${formatTime(signal.signal_timestamp)}</div>
+                    </div>
+
+                    <div class="d-flex justify-content-between">
+                        <span class="badge bg-warning">${signal.status}</span>
+                        ${signal.max_price_increase ?
+                            `<span class="text-success">+${parseFloat(signal.max_price_increase).toFixed(2)}%</span>` : ''}
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <button class="btn btn-sm btn-primary w-100" onclick="showSignalDetail(${signal.id})">
+                        <i class="bi bi-eye"></i> View Details
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function applyFilters() {
+    let filtered = [...activeSignals];
+
+    // Apply strength filter
+    const strength = document.getElementById('filter-strength').value;
+    if (strength) {
+        filtered = filtered.filter(s => s.signal_strength === strength);
+    }
+
+    // Apply status filter
+    const status = document.getElementById('filter-status').value;
+    if (status) {
+        filtered = filtered.filter(s => s.status === status);
+    }
+
+    // Apply confidence filter
+    const minConfidence = parseInt(document.getElementById('filter-confidence').value);
+    filtered = filtered.filter(s => {
+        const conf = s.initial_confidence || s.total_score || 0;
+        return conf >= minConfidence;
+    });
+
+    // Apply sorting
+    const sortBy = document.getElementById('sort-by').value;
+    filtered.sort((a, b) => {
+        switch(sortBy) {
+            case 'time':
+                return new Date(b.signal_timestamp) - new Date(a.signal_timestamp);
+            case 'strength':
+                const strengthOrder = {'EXTREME': 4, 'STRONG': 3, 'MEDIUM': 2, 'WEAK': 1};
+                return (strengthOrder[b.signal_strength] || 0) - (strengthOrder[a.signal_strength] || 0);
+            case 'confidence':
+                const confA = a.initial_confidence || a.total_score || 0;
+                const confB = b.initial_confidence || b.total_score || 0;
+                return confB - confA;
+            case 'spike':
+                return (b.futures_spike_ratio_7d || 0) - (a.futures_spike_ratio_7d || 0);
+            default:
+                return 0;
+        }
+    });
+
+    renderSignals(filtered);
+}
+
+async function showSignalDetail(signalId) {
+    try {
+        const response = await fetchAPI(`/signals/${signalId}`);
+        const signal = response.signal || response;
+
+        const content = document.getElementById('signal-detail-content');
+        content.innerHTML = `
+            <div class="row">
+                <div class="col-md-6">
+                    <h6>Basic Information</h6>
+                    <table class="table table-sm">
+                        <tr><td>Pair:</td><td><strong>${signal.pair_symbol}</strong></td></tr>
+                        <tr><td>Signal Time:</td><td>${new Date(signal.signal_timestamp).toLocaleString()}</td></tr>
+                        <tr><td>Detected At:</td><td>${new Date(signal.detected_at).toLocaleString()}</td></tr>
+                        <tr><td>Status:</td><td><span class="badge bg-warning">${signal.status}</span></td></tr>
+                        <tr><td>Strength:</td><td><span class="badge ${getStrengthClass(signal.signal_strength)}">${signal.signal_strength}</span></td></tr>
+                    </table>
+                </div>
+                <div class="col-md-6">
+                    <h6>Metrics</h6>
+                    <table class="table table-sm">
+                        <tr><td>7D Spike:</td><td><strong>${parseFloat(signal.futures_spike_ratio_7d || 0).toFixed(2)}x</strong></td></tr>
+                        <tr><td>14D Spike:</td><td>${parseFloat(signal.futures_spike_ratio_14d || 0).toFixed(2)}x</td></tr>
+                        <tr><td>30D Spike:</td><td>${parseFloat(signal.futures_spike_ratio_30d || 0).toFixed(2)}x</td></tr>
+                        <tr><td>Confidence:</td><td>${signal.initial_confidence || signal.total_score || 0}%</td></tr>
+                        <tr><td>Max Gain:</td><td class="text-success">${parseFloat(signal.max_price_increase || 0).toFixed(2)}%</td></tr>
+                    </table>
+                </div>
+            </div>
+
+            ${response.confirmations && response.confirmations.length > 0 ? `
+                <hr>
+                <h6>Confirmations</h6>
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Type</th>
+                                <th>Score</th>
+                                <th>Details</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${response.confirmations.map(c => `
+                                <tr>
+                                    <td>${formatTime(c.confirmation_timestamp)}</td>
+                                    <td>${c.confirmation_type}</td>
+                                    <td>${c.confidence_boost}%</td>
+                                    <td>${c.details || '-'}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            ` : ''}
+        `;
+
+        // Update Binance link
+        document.getElementById('binance-link').href = `https://www.binance.com/en/trade/${signal.pair_symbol}`;
+
+        // Show modal
+        const modal = new bootstrap.Modal(document.getElementById('signalDetailModal'));
+        modal.show();
+
+    } catch (error) {
+        console.error('Error loading signal details:', error);
+        alert('Failed to load signal details');
+    }
+}
+
+function refreshSignals() {
+    const btn = event.target;
+    btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Loading...';
+    btn.disabled = true;
+
+    loadActiveSignals().finally(() => {
+        btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Refresh';
+        btn.disabled = false;
+    });
+}
+
+function exportSignals() {
+    const csv = convertToCSV(activeSignals);
+    downloadCSV(csv, `active_signals_${new Date().toISOString().split('T')[0]}.csv`);
+}
+
+function convertToCSV(data) {
+    if (!data || data.length === 0) return '';
+
+    const headers = ['Pair', 'Signal Time', 'Status', 'Strength', '7D Spike', '14D Spike', 'Confidence', 'Max Gain'];
+    const rows = data.map(s => [
+        s.pair_symbol,
+        s.signal_timestamp,
+        s.status,
+        s.signal_strength,
+        s.futures_spike_ratio_7d,
+        s.futures_spike_ratio_14d,
+        s.initial_confidence || s.total_score || 0,
+        s.max_price_increase || 0
+    ]);
+
+    return [headers, ...rows].map(row => row.join(',')).join('\n');
+}
+
+function downloadCSV(csv, filename) {
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.setAttribute('hidden', '');
+    a.setAttribute('href', url);
+    a.setAttribute('download', filename);
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+}
+
+// Helper functions
+function getStrengthClass(strength) {
+    switch (strength) {
+        case 'WEAK': return 'signal-strength-weak';
+        case 'MEDIUM': return 'signal-strength-medium';
+        case 'STRONG': return 'signal-strength-strong';
+        case 'EXTREME': return 'signal-strength-extreme';
+        default: return 'bg-secondary';
+    }
+}
+
+function getConfidenceClass(confidence) {
+    if (confidence >= 80) return 'bg-danger';
+    if (confidence >= 60) return 'bg-warning';
+    if (confidence >= 40) return 'bg-info';
+    return 'bg-secondary';
+}
+
+function formatTime(timestamp) {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diff = now - date;
+
+    if (diff < 60000) return 'Just now';
+    if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+
+    return date.toLocaleString();
+}
+</script>
+{% endblock %}

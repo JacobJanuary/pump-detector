@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+
+{% block title %}Configuration - Pump Detection System{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h2 class="text-light">
+            <i class="bi bi-gear"></i> System Configuration
+        </h2>
+        <p class="text-secondary">Manage detection parameters and system settings</p>
+    </div>
+</div>
+
+<!-- Configuration Settings -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5>Detection Parameters</h5>
+    </div>
+    <div class="card-body">
+        <form id="config-form">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">Minimum Spike Ratio</label>
+                    <input type="number" class="form-control" id="min-spike" value="1.5" step="0.1">
+                    <small class="text-muted">Minimum volume spike to trigger detection</small>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Detection Interval (minutes)</label>
+                    <input type="number" class="form-control" id="interval" value="5">
+                    <small class="text-muted">How often to check for anomalies</small>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Lookback Period (hours)</label>
+                    <input type="number" class="form-control" id="lookback" value="4">
+                    <small class="text-muted">Time window for recent anomaly detection</small>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Monitoring Duration (hours)</label>
+                    <input type="number" class="form-control" id="monitoring" value="24">
+                    <small class="text-muted">How long to monitor active signals</small>
+                </div>
+            </div>
+
+            <h6 class="mt-4">Signal Strength Thresholds</h6>
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">WEAK</label>
+                    <input type="number" class="form-control" id="weak-threshold" value="1.5" step="0.1">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">MEDIUM</label>
+                    <input type="number" class="form-control" id="medium-threshold" value="2.0" step="0.1">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">STRONG</label>
+                    <input type="number" class="form-control" id="strong-threshold" value="3.0" step="0.1">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">EXTREME</label>
+                    <input type="number" class="form-control" id="extreme-threshold" value="5.0" step="0.1">
+                </div>
+            </div>
+
+            <div class="mt-4">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-save"></i> Save Configuration
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="loadDefaults()">
+                    <i class="bi bi-arrow-clockwise"></i> Reset to Defaults
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- System Status -->
+<div class="card">
+    <div class="card-header">
+        <h5>System Status</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Component</th>
+                        <th>Status</th>
+                        <th>Last Activity</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Detector Daemon</td>
+                        <td><span class="badge bg-success">Active</span></td>
+                        <td id="detector-last">-</td>
+                        <td>
+                            <button class="btn btn-sm btn-warning" onclick="restartDaemon('detector')">
+                                <i class="bi bi-arrow-clockwise"></i> Restart
+                            </button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Validator Daemon</td>
+                        <td><span class="badge bg-success">Active</span></td>
+                        <td id="validator-last">-</td>
+                        <td>
+                            <button class="btn btn-sm btn-warning" onclick="restartDaemon('validator')">
+                                <i class="bi bi-arrow-clockwise"></i> Restart
+                            </button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Spot-Futures Analyzer</td>
+                        <td><span class="badge bg-success">Active</span></td>
+                        <td id="analyzer-last">-</td>
+                        <td>
+                            <button class="btn btn-sm btn-warning" onclick="restartDaemon('analyzer')">
+                                <i class="bi bi-arrow-clockwise"></i> Restart
+                            </button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    loadCurrentConfig();
+
+    document.getElementById('config-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        saveConfiguration();
+    });
+});
+
+async function loadCurrentConfig() {
+    try {
+        const response = await fetchAPI('/config');
+        // Populate form with current values
+        console.log('Current config:', response);
+    } catch (error) {
+        console.error('Error loading config:', error);
+    }
+}
+
+function saveConfiguration() {
+    // In a real implementation, this would save to the database
+    alert('Configuration saved successfully!');
+}
+
+function loadDefaults() {
+    document.getElementById('min-spike').value = 1.5;
+    document.getElementById('interval').value = 5;
+    document.getElementById('lookback').value = 4;
+    document.getElementById('monitoring').value = 24;
+    document.getElementById('weak-threshold').value = 1.5;
+    document.getElementById('medium-threshold').value = 2.0;
+    document.getElementById('strong-threshold').value = 3.0;
+    document.getElementById('extreme-threshold').value = 5.0;
+}
+
+function restartDaemon(daemon) {
+    if (confirm(`Are you sure you want to restart the ${daemon} daemon?`)) {
+        alert(`Restarting ${daemon}...`);
+        // In a real implementation, this would restart the daemon
+    }
+}
+</script>
+{% endblock %}

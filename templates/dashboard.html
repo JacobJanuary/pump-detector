@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Pump Detection System{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% endblock %}
+
+{% block content %}
+<!-- Stats Cards Row -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-2 text-muted">Active Signals</h6>
+                <h2 class="card-title" id="active-signals">0</h2>
+                <span class="badge bg-warning">MONITORING</span>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-2 text-muted">24h Signals</h6>
+                <h2 class="card-title" id="signals-24h">0</h2>
+                <span class="text-success"><i class="bi bi-graph-up"></i> Detected</span>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-2 text-muted">Confirmed Pumps</h6>
+                <h2 class="card-title" id="pumps-24h">0</h2>
+                <span class="text-info"><i class="bi bi-check-circle"></i> 24h</span>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-2 text-muted">Success Rate</h6>
+                <h2 class="card-title" id="accuracy">0%</h2>
+                <span class="text-warning"><i class="bi bi-percent"></i> Accuracy</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Row -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Signal Activity (24h)</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="signalChart" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Signal Strength Distribution</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="strengthChart" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Active Signals Table -->
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">Active Signals</h5>
+        <div>
+            <button class="btn btn-sm btn-primary" onclick="refreshSignals()">
+                <i class="bi bi-arrow-clockwise"></i> Refresh
+            </button>
+            <a href="/signals" class="btn btn-sm btn-success">
+                <i class="bi bi-eye"></i> View All
+            </a>
+        </div>
+    </div>
+    <div class="card-body">
+        <div id="no-signals" class="text-center text-muted py-5" style="display: none;">
+            <i class="bi bi-inbox" style="font-size: 3rem;"></i>
+            <p>No active signals at the moment</p>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover" id="signals-table" style="display: none;">
+                <thead>
+                    <tr>
+                        <th>Pair</th>
+                        <th>Time</th>
+                        <th>Strength</th>
+                        <th>7D Spike</th>
+                        <th>Confidence</th>
+                        <th>Price Change</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="signals-tbody"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Recent History Table -->
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">Recent History</h5>
+        <a href="/history" class="btn btn-sm btn-primary">
+            <i class="bi bi-clock-history"></i> View All
+        </a>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Pair</th>
+                        <th>Result</th>
+                        <th>Gain</th>
+                        <th>Strength</th>
+                    </tr>
+                </thead>
+                <tbody id="history-tbody">
+                    <tr>
+                        <td colspan="5" class="text-center text-muted">Loading...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Signal Modal -->
+<div class="modal fade" id="signalModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Signal Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="signal-details"></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<!-- Chart.js already loaded -->
+<script src="/static/js/dashboard_v2.js?v={{ version }}"></script>
+{% endblock %}

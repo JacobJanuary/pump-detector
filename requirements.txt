@@ -1,0 +1,22 @@
+# Core dependencies
+psycopg2-binary>=2.9.0
+numpy>=1.21.0
+pandas>=1.3.0
+
+# Web API
+flask>=2.0.0
+flask-cors>=3.0.10
+
+# Data visualization (for reports)
+matplotlib>=3.4.0
+seaborn>=0.11.0
+
+# Optional: Machine learning (for future ML module)
+scikit-learn>=1.0.0
+
+# Optional: Telegram bot (for notifications)
+python-telegram-bot>=13.7
+
+# Utilities
+python-dateutil>=2.8.0
+pytz>=2021.1

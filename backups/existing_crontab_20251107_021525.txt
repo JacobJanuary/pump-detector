@@ -1,0 +1,33 @@
+0 3 * * 1 ~/backup_vpn.sh > /dev/null 2>&1
+* * * * * ~/vpn_watchdog.sh
+
+# 1. Обновление данных
+3-59/5 * * * * psql -h localhost -U elcrypto -d fox_crypto_new -c "SELECT fas.automated_update_simple();" >> /home/elcrypto/logs/auto_update.log 2>&1
+1-59/5 * * * * psql -h localhost -U elcrypto -d fox_crypto_new -c "SELECT fas_v2.automated_update_v2();" >> /home/elcrypto/logs/auto_update2.log 2>&1
+#* * * * * /home/elcrypto/fas/fas_signal_processing_v3.0.sh >> /home/elcrypto/logs/fas_cron.log 2>&1
+
+# Режимы рынка раз в 4 часа:
+2 */4 * * * psql -h localhost -U elcrypto -d fox_crypto_new -c "SELECT fas_v2.smart_update_market_regime();" >> /home/elcrypto/logs/fas_v2_market_regime.log 2>&1
+# Обновляем категории через Coin Marketcup (по воскресеньям в 3:07)
+7 3 * * 0 /home/elcrypto/cron/.venv/bin/python /home/elcrypto/cron/get_cmc_category_relations.py
+
+# Обновление списка токенов CoinMarketCup (раз в день в 4:07)
+7 4 * * * /home/elcrypto/cron/.venv/bin/python /home/elcrypto/cron/get_cmc_crypto.py
+
+# Обслуживание БД (каждую первую субботу месяца в 2:07)
+7 2 1-7 * 6 [ $(date +\%u) -eq 6 ] && /bin/bash /home/elcrypto/cron/monthly_db_maintenance.sh
+
+# Обновление пар с бирж (каждый день в 23:57)
+57 23 * * * /home/elcrypto/cron/.venv/bin/python /home/elcrypto/cron/create_futures_spot_pairs.py
+
+# Категории в CoinMarketCup (раз в неделю, по воскресеньям, в 3:47)
+47 3 * * 0 /home/elcrypto/cron/.venv/bin/python /home/elcrypto/cron/get_cmc_categories.py
+
+# 5. Очистка логов
+0 3 * * 0 find /home/elcrypto/logs -name "*.log" -mtime +30 -delete
+
+17 0 * * *  /home/elcrypto/win_rate/.venv/bin/python /home/elcrypto/win_rate/analyze_scoring_history_v3.py >> /home/elcrypto/logs/wr_update.log 2>&1
+23 0 * * *  /home/elcrypto/win_rate/refresh_analysis.sh  >> /home/elcrypto/logs/refresh_analysis.log 2>&1
+37 0 * * *  /home/elcrypto/calk_wk/run_backtests.sh >> /home/elcrypto/logs/wr_deep_research.log 2>&1
+# Каждую ночь в 3:00
+37 1 * * *  /home/elcrypto/cron/.venv/bin/python /home/elcrypto/cron/maintenance_cleanup.py >> /home/elcrypto/logs/postgres_maintenance.log 2>&1

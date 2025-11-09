@@ -1,0 +1,27 @@
+[Unit]
+Description=Pump Web API Service
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=elcrypto
+Group=elcrypto
+WorkingDirectory=/home/elcrypto/pump_detector
+Environment="PYTHONUNBUFFERED=1"
+Environment="FLASK_ENV=production"
+ExecStart=/home/elcrypto/pump_detector/venv/bin/python3 /home/elcrypto/pump_detector/api/web_api.py
+Restart=always
+RestartSec=10
+StandardOutput=append:/home/elcrypto/pump_detector/logs/web_api.log
+StandardError=append:/home/elcrypto/pump_detector/logs/web_api_error.log
+
+# Security settings
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/elcrypto/pump_detector/logs
+
+[Install]
+WantedBy=multi-user.target

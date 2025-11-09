@@ -1,0 +1,342 @@
+{% extends "base.html" %}
+
+{% block title %}Analytics - Pump Detection System{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h2 class="text-light">
+            <i class="bi bi-bar-chart"></i> Analytics Dashboard
+        </h2>
+        <p class="text-secondary">Performance metrics and statistical analysis</p>
+    </div>
+</div>
+
+<!-- Performance Overview -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <h6 class="text-muted">Total Signals (30d)</h6>
+                <h3 id="total-signals">0</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <h6 class="text-muted">Success Rate</h6>
+                <h3 class="text-success" id="success-rate">0%</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <h6 class="text-muted">Avg Pump Size</h6>
+                <h3 class="text-info" id="avg-pump">0%</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <h6 class="text-muted">Max Pump</h6>
+                <h3 class="text-warning" id="max-pump">0%</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Row -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5>Signal Activity (24h)</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="activityChart" height="150"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5>Strength Distribution</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="strengthChart" height="150"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Performance by Strength -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5>Performance by Signal Strength</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Strength</th>
+                        <th>Count</th>
+                        <th>Success Rate</th>
+                        <th>Avg Gain</th>
+                        <th>Performance</th>
+                    </tr>
+                </thead>
+                <tbody id="strength-performance">
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Top Performing Pairs -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5>Top Performing Pairs</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Pair</th>
+                        <th>Signals</th>
+                        <th>Pumps</th>
+                        <th>Success Rate</th>
+                        <th>Avg Gain</th>
+                    </tr>
+                </thead>
+                <tbody id="top-pairs">
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Daily Performance Chart -->
+<div class="card">
+    <div class="card-header">
+        <h5>30-Day Performance Trend</h5>
+    </div>
+    <div class="card-body">
+        <canvas id="performanceChart" height="100"></canvas>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let activityChart = null;
+let strengthChart = null;
+let performanceChart = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    initCharts();
+    loadAnalytics();
+    setInterval(loadAnalytics, 30000); // Refresh every 30 seconds
+});
+
+function initCharts() {
+    // Activity Chart
+    const activityCtx = document.getElementById('activityChart').getContext('2d');
+    activityChart = new Chart(activityCtx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'Signals',
+                data: [],
+                borderColor: '#58a6ff',
+                backgroundColor: 'rgba(88, 166, 255, 0.1)',
+                tension: 0.3
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: { color: '#30363d' },
+                    ticks: { color: '#8b949e' }
+                },
+                x: {
+                    grid: { color: '#30363d' },
+                    ticks: { color: '#8b949e' }
+                }
+            }
+        }
+    });
+
+    // Strength Distribution Chart
+    const strengthCtx = document.getElementById('strengthChart').getContext('2d');
+    strengthChart = new Chart(strengthCtx, {
+        type: 'doughnut',
+        data: {
+            labels: ['WEAK', 'MEDIUM', 'STRONG', 'EXTREME'],
+            datasets: [{
+                data: [0, 0, 0, 0],
+                backgroundColor: [
+                    '#6c757d',
+                    '#f0c674',
+                    '#ff8c00',
+                    '#f85149'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: { color: '#c9d1d9' }
+                }
+            }
+        }
+    });
+
+    // Performance Trend Chart
+    const performanceCtx = document.getElementById('performanceChart').getContext('2d');
+    performanceChart = new Chart(performanceCtx, {
+        type: 'bar',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'Success Rate',
+                data: [],
+                backgroundColor: 'rgba(88, 166, 255, 0.6)',
+                borderColor: '#58a6ff',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100,
+                    grid: { color: '#30363d' },
+                    ticks: {
+                        color: '#8b949e',
+                        callback: function(value) {
+                            return value + '%';
+                        }
+                    }
+                },
+                x: {
+                    grid: { color: '#30363d' },
+                    ticks: { color: '#8b949e' }
+                }
+            }
+        }
+    });
+}
+
+async function loadAnalytics() {
+    try {
+        // Load performance analytics
+        const perfData = await fetchAPI('/analytics/performance?days=30');
+        updatePerformanceMetrics(perfData);
+
+        // Load statistics for charts
+        const statsData = await fetchAPI('/statistics');
+        updateCharts(statsData);
+
+    } catch (error) {
+        console.error('Error loading analytics:', error);
+    }
+}
+
+function updatePerformanceMetrics(data) {
+    if (data.overall) {
+        document.getElementById('total-signals').textContent = data.overall.total_signals || 0;
+        document.getElementById('success-rate').textContent = (data.overall.success_rate || 0) + '%';
+        document.getElementById('avg-pump').textContent = (data.overall.avg_pump_size || 0) + '%';
+        document.getElementById('max-pump').textContent = (data.overall.max_pump_size || 0) + '%';
+    }
+
+    // Update strength performance table
+    if (data.by_strength) {
+        const tbody = document.getElementById('strength-performance');
+        tbody.innerHTML = data.by_strength.map(item => `
+            <tr>
+                <td><span class="badge ${getStrengthClass(item.signal_strength)}">${item.signal_strength}</span></td>
+                <td>${item.count}</td>
+                <td>${item.accuracy}%</td>
+                <td>${item.avg_gain || 0}%</td>
+                <td>
+                    <div class="progress" style="height: 20px;">
+                        <div class="progress-bar ${item.accuracy >= 50 ? 'bg-success' : 'bg-warning'}"
+                             style="width: ${item.accuracy}%">${item.accuracy}%</div>
+                    </div>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    // Update top pairs table
+    if (data.top_pairs) {
+        const tbody = document.getElementById('top-pairs');
+        tbody.innerHTML = data.top_pairs.map(pair => `
+            <tr>
+                <td><strong>${pair.pair_symbol}</strong></td>
+                <td>${pair.signals}</td>
+                <td>${pair.pumps}</td>
+                <td>${((pair.pumps / pair.signals) * 100).toFixed(1)}%</td>
+                <td>${pair.avg_gain}%</td>
+            </tr>
+        `).join('');
+    }
+}
+
+function updateCharts(data) {
+    // Update activity chart
+    if (data.hourly_signals) {
+        const hours = Object.keys(data.hourly_signals).slice(-24);
+        const values = hours.map(h => data.hourly_signals[h] || 0);
+
+        activityChart.data.labels = hours.map(h => `${h}:00`);
+        activityChart.data.datasets[0].data = values;
+        activityChart.update();
+    }
+
+    // Update strength distribution
+    if (data.strength_distribution) {
+        const distribution = data.strength_distribution;
+        strengthChart.data.datasets[0].data = [
+            distribution.WEAK || 0,
+            distribution.MEDIUM || 0,
+            distribution.STRONG || 0,
+            distribution.EXTREME || 0
+        ];
+        strengthChart.update();
+    }
+}
+
+function getStrengthClass(strength) {
+    switch (strength) {
+        case 'WEAK': return 'bg-secondary';
+        case 'MEDIUM': return 'bg-warning';
+        case 'STRONG': return 'bg-orange';
+        case 'EXTREME': return 'bg-danger';
+        default: return 'bg-secondary';
+    }
+}
+</script>
+{% endblock %}

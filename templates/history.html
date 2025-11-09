@@ -1,0 +1,289 @@
+{% extends "base.html" %}
+
+{% block title %}Signal History - Pump Detection System{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h2 class="text-light">
+            <i class="bi bi-clock-history"></i> Signal History
+        </h2>
+        <p class="text-secondary">Historical analysis of all detected signals</p>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form id="history-filters" class="row g-3">
+            <div class="col-md-2">
+                <label class="form-label">Date Range</label>
+                <select class="form-select" id="days-filter">
+                    <option value="7">Last 7 Days</option>
+                    <option value="14">Last 14 Days</option>
+                    <option value="30" selected>Last 30 Days</option>
+                    <option value="90">Last 90 Days</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Pair</label>
+                <input type="text" class="form-control" id="pair-filter" placeholder="e.g., BTCUSDT">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Signal Strength</label>
+                <select class="form-select" id="strength-filter">
+                    <option value="">All</option>
+                    <option value="EXTREME">EXTREME</option>
+                    <option value="STRONG">STRONG</option>
+                    <option value="MEDIUM">MEDIUM</option>
+                    <option value="WEAK">WEAK</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Result</label>
+                <select class="form-select" id="result-filter">
+                    <option value="">All</option>
+                    <option value="true">Pumped</option>
+                    <option value="false">No Pump</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">&nbsp;</label>
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="bi bi-search"></i> Apply Filters
+                </button>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">&nbsp;</label>
+                <button type="button" class="btn btn-success w-100" onclick="exportHistory()">
+                    <i class="bi bi-download"></i> Export
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Statistics Summary -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <h5 class="text-muted">Total Signals</h5>
+                <h3 id="stat-total">0</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <h5 class="text-muted">Successful Pumps</h5>
+                <h3 class="text-success" id="stat-pumps">0</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <h5 class="text-muted">Success Rate</h5>
+                <h3 id="stat-rate">0%</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <h5 class="text-muted">Avg Gain</h5>
+                <h3 class="text-info" id="stat-gain">0%</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- History Table -->
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover" id="history-table">
+                <thead>
+                    <tr>
+                        <th>Date/Time</th>
+                        <th>Pair</th>
+                        <th>Strength</th>
+                        <th>7D Spike</th>
+                        <th>Confidence</th>
+                        <th>Result</th>
+                        <th>Max Gain</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="history-tbody">
+                    <tr>
+                        <td colspan="9" class="text-center">Loading...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        <nav>
+            <ul class="pagination justify-content-center" id="pagination">
+            </ul>
+        </nav>
+    </div>
+</div>
+
+<!-- Signal Detail Modal -->
+<div class="modal fade" id="historyDetailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Signal Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="detail-content">
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentPage = 1;
+let totalPages = 1;
+let historyData = [];
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadHistory();
+
+    document.getElementById('history-filters').addEventListener('submit', function(e) {
+        e.preventDefault();
+        currentPage = 1;
+        loadHistory();
+    });
+});
+
+async function loadHistory() {
+    const days = document.getElementById('days-filter').value;
+    const pair = document.getElementById('pair-filter').value;
+    const strength = document.getElementById('strength-filter').value;
+
+    const params = new URLSearchParams({
+        days: days,
+        limit: 100
+    });
+
+    if (pair) params.append('pair', pair);
+    if (strength) params.append('strength', strength);
+
+    try {
+        const response = await fetchAPI(`/signals/history?${params}`);
+        historyData = response.signals || [];
+        updateStatistics();
+        renderTable();
+    } catch (error) {
+        console.error('Error loading history:', error);
+    }
+}
+
+function updateStatistics() {
+    const total = historyData.length;
+    const pumps = historyData.filter(s => s.pump_realized).length;
+    const rate = total > 0 ? ((pumps / total) * 100).toFixed(1) : 0;
+    const avgGain = historyData.reduce((sum, s) => sum + (s.max_price_increase || 0), 0) / (total || 1);
+
+    document.getElementById('stat-total').textContent = total;
+    document.getElementById('stat-pumps').textContent = pumps;
+    document.getElementById('stat-rate').textContent = rate + '%';
+    document.getElementById('stat-gain').textContent = avgGain.toFixed(2) + '%';
+}
+
+function renderTable() {
+    const tbody = document.getElementById('history-tbody');
+
+    if (historyData.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="9" class="text-center">No data found</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = historyData.map(signal => `
+        <tr>
+            <td>${new Date(signal.signal_timestamp).toLocaleString()}</td>
+            <td><strong>${signal.pair_symbol}</strong></td>
+            <td><span class="badge ${getStrengthClass(signal.signal_strength)}">${signal.signal_strength || 'N/A'}</span></td>
+            <td>${parseFloat(signal.futures_spike_ratio_7d || 0).toFixed(2)}x</td>
+            <td>${signal.initial_confidence || 0}%</td>
+            <td>
+                ${signal.pump_realized ?
+                    '<span class="badge bg-success">PUMP</span>' :
+                    '<span class="badge bg-secondary">NO PUMP</span>'}
+            </td>
+            <td class="${signal.max_price_increase > 0 ? 'text-success' : ''}">
+                ${parseFloat(signal.max_price_increase || 0).toFixed(2)}%
+            </td>
+            <td><span class="badge bg-info">${signal.status}</span></td>
+            <td>
+                <button class="btn btn-sm btn-primary" onclick="showDetail(${signal.id})">
+                    <i class="bi bi-eye"></i>
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+async function showDetail(signalId) {
+    try {
+        const response = await fetchAPI(`/signals/${signalId}`);
+        const signal = response.signal || response;
+
+        document.getElementById('detail-content').innerHTML = `
+            <h6>Signal: ${signal.pair_symbol}</h6>
+            <table class="table">
+                <tr><td>Time:</td><td>${new Date(signal.signal_timestamp).toLocaleString()}</td></tr>
+                <tr><td>Strength:</td><td>${signal.signal_strength}</td></tr>
+                <tr><td>7D Spike:</td><td>${parseFloat(signal.futures_spike_ratio_7d || 0).toFixed(2)}x</td></tr>
+                <tr><td>Result:</td><td>${signal.pump_realized ? 'PUMP REALIZED' : 'No Pump'}</td></tr>
+                <tr><td>Max Gain:</td><td>${parseFloat(signal.max_price_increase || 0).toFixed(2)}%</td></tr>
+            </table>
+        `;
+
+        new bootstrap.Modal(document.getElementById('historyDetailModal')).show();
+    } catch (error) {
+        console.error('Error loading details:', error);
+    }
+}
+
+function exportHistory() {
+    const csv = [
+        ['Date', 'Pair', 'Strength', '7D Spike', 'Confidence', 'Result', 'Max Gain'],
+        ...historyData.map(s => [
+            s.signal_timestamp,
+            s.pair_symbol,
+            s.signal_strength,
+            s.futures_spike_ratio_7d,
+            s.initial_confidence,
+            s.pump_realized ? 'PUMP' : 'NO PUMP',
+            s.max_price_increase || 0
+        ])
+    ].map(row => row.join(',')).join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `signal_history_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+}
+
+function getStrengthClass(strength) {
+    switch (strength) {
+        case 'WEAK': return 'bg-secondary';
+        case 'MEDIUM': return 'bg-warning';
+        case 'STRONG': return 'bg-orange';
+        case 'EXTREME': return 'bg-danger';
+        default: return 'bg-secondary';
+    }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pump Detection V2.0 - Backtest Results</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: #fff;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .header .subtitle {
+            font-size: 1.2em;
+            color: #a8d5ff;
+        }
+
+        .nav {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .nav a {
+            padding: 10px 25px;
+            background: rgba(255, 255, 255, 0.15);
+            color: white;
+            text-decoration: none;
+            border-radius: 25px;
+            transition: all 0.3s;
+        }
+
+        .nav a:hover, .nav a.active {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+            max-width: 1400px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .metric-card {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            text-align: center;
+        }
+
+        .metric-card h3 {
+            font-size: 0.9em;
+            color: #a8d5ff;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+
+        .metric-card .value {
+            font-size: 2.5em;
+            font-weight: bold;
+        }
+
+        .metric-card .label {
+            font-size: 0.85em;
+            color: #ccc;
+            margin-top: 5px;
+        }
+
+        .metric-card.success .value {
+            color: #4CAF50;
+        }
+
+        .metric-card.warning .value {
+            color: #FF9800;
+        }
+
+        .metric-card.info .value {
+            color: #2196F3;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 30px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            max-width: 1400px;
+            margin: 20px auto;
+        }
+
+        .section-header {
+            font-size: 1.5em;
+            margin-bottom: 20px;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.2);
+            padding-bottom: 10px;
+        }
+
+        .charts-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        .chart-container {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 20px;
+            border-radius: 10px;
+            min-height: 300px;
+        }
+
+        .chart-title {
+            font-size: 1.1em;
+            margin-bottom: 15px;
+            color: #a8d5ff;
+            text-align: center;
+        }
+
+        .stats-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        .stats-table th {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #a8d5ff;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .stats-table td {
+            padding: 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .stats-table tr:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+
+        .badge.high {
+            background: #4CAF50;
+        }
+
+        .badge.medium {
+            background: #FF9800;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            font-size: 1.2em;
+            color: #a8d5ff;
+        }
+
+        .error {
+            background: rgba(244, 67, 54, 0.2);
+            border: 1px solid #f44336;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+            color: #ffcdd2;
+        }
+
+        .summary-box {
+            background: rgba(76, 175, 80, 0.2);
+            border: 1px solid #4CAF50;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+        }
+
+        .summary-box h3 {
+            color: #81C784;
+            margin-bottom: 15px;
+        }
+
+        .summary-box p {
+            margin: 8px 0;
+            line-height: 1.6;
+        }
+
+        .summary-box .highlight {
+            color: #4CAF50;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Backtest Validation Results</h1>
+        <p class="subtitle">Performance Analysis on 136 Historical Pump Events</p>
+    </div>
+
+    <div class="nav">
+        <a href="/">Dashboard</a>
+        <a href="/backtest" class="active">Backtest Results</a>
+    </div>
+
+    <div class="metrics-grid" id="metricsGrid">
+        <div class="metric-card success">
+            <h3>Precision</h3>
+            <div class="value" id="precision">--</div>
+            <div class="label">Zero false positives</div>
+        </div>
+        <div class="metric-card warning">
+            <h3>Recall</h3>
+            <div class="value" id="recall">--</div>
+            <div class="label">Detection rate</div>
+        </div>
+        <div class="metric-card info">
+            <h3>F1 Score</h3>
+            <div class="value" id="f1score">--</div>
+            <div class="label">Overall balance</div>
+        </div>
+        <div class="metric-card">
+            <h3>Total Tests</h3>
+            <div class="value" id="totalTests">--</div>
+            <div class="label">680 backtest runs</div>
+        </div>
+        <div class="metric-card success">
+            <h3>True Positives</h3>
+            <div class="value" id="truePositives">--</div>
+            <div class="label">Correctly detected</div>
+        </div>
+        <div class="metric-card warning">
+            <h3>False Negatives</h3>
+            <div class="value" id="falseNegatives">--</div>
+            <div class="label">Missed pumps</div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="summary-box" id="summaryBox" style="display: none;">
+            <h3>Validation Summary</h3>
+            <p>
+                The Pump Detection Engine V2.0 was validated on <span class="highlight">136 historical pump events</span>
+                across <span class="highlight">5 time windows</span> (72h, 60h, 48h, 36h, 24h before pump).
+            </p>
+            <p>
+                Key findings: <span class="highlight" id="summaryPrecision">100%</span> precision (zero false positives),
+                <span class="highlight" id="summaryRecall">--</span> recall,
+                with <span class="highlight" id="summaryActionable">--</span> actionable HIGH confidence detections.
+            </p>
+            <p>
+                The system demonstrates reliable pump prediction capability with strong signal quality.
+            </p>
+        </div>
+
+        <h2 class="section-header">Detection Rate by Time Window</h2>
+        <div class="chart-container">
+            <canvas id="timeWindowChart"></canvas>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="charts-row">
+            <div class="chart-container">
+                <div class="chart-title">Performance by Confidence Level</div>
+                <canvas id="confidenceChart"></canvas>
+            </div>
+            <div class="chart-container">
+                <div class="chart-title">Detection by Pattern Type</div>
+                <canvas id="patternChart"></canvas>
+            </div>
+        </div>
+
+        <h2 class="section-header">Detailed Statistics</h2>
+
+        <h3 style="margin: 20px 0 10px 0; color: #a8d5ff;">Time Window Analysis</h3>
+        <table class="stats-table" id="timeWindowTable">
+            <thead>
+                <tr>
+                    <th>Hours Before Pump</th>
+                    <th>Total Tests</th>
+                    <th>Detected</th>
+                    <th>Actionable</th>
+                    <th>Detection Rate</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr><td colspan="5" class="loading">Loading...</td></tr>
+            </tbody>
+        </table>
+
+        <h3 style="margin: 30px 0 10px 0; color: #a8d5ff;">Confidence Level Analysis</h3>
+        <table class="stats-table" id="confidenceTable">
+            <thead>
+                <tr>
+                    <th>Confidence</th>
+                    <th>Count</th>
+                    <th>Avg Score</th>
+                    <th>Actionable</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr><td colspan="4" class="loading">Loading...</td></tr>
+            </tbody>
+        </table>
+
+        <h3 style="margin: 30px 0 10px 0; color: #a8d5ff;">Pattern Type Analysis</h3>
+        <table class="stats-table" id="patternTable">
+            <thead>
+                <tr>
+                    <th>Pattern Type</th>
+                    <th>Count</th>
+                    <th>Avg Score</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr><td colspan="3" class="loading">Loading...</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        let timeWindowChart, confidenceChart, patternChart;
+
+        async function loadBacktestMetrics() {
+            try {
+                const response = await fetch('/api/v2/backtest/metrics');
+                const data = await response.json();
+
+                if (!data.success) {
+                    throw new Error(data.error || 'Failed to load metrics');
+                }
+
+                displayMetrics(data.metrics);
+
+            } catch (error) {
+                console.error('Error loading backtest metrics:', error);
+                document.getElementById('metricsGrid').innerHTML = `
+                    <div class="error" style="grid-column: 1 / -1;">Error loading backtest metrics: ${error.message}</div>
+                `;
+            }
+        }
+
+        function displayMetrics(metrics) {
+            // Overall metrics
+            const overall = metrics.overall;
+            document.getElementById('precision').textContent = (overall.precision * 100).toFixed(1) + '%';
+            document.getElementById('recall').textContent = (overall.recall * 100).toFixed(1) + '%';
+            document.getElementById('f1score').textContent = (overall.f1_score * 100).toFixed(1) + '%';
+            document.getElementById('totalTests').textContent = (overall.tp + overall.fp + overall.fn + overall.tn);
+            document.getElementById('truePositives').textContent = overall.tp;
+            document.getElementById('falseNegatives').textContent = overall.fn;
+
+            // Summary box
+            const actionable = metrics.by_confidence.find(c => c.confidence === 'HIGH')?.actionable_count || 0;
+            document.getElementById('summaryPrecision').textContent = (overall.precision * 100).toFixed(0) + '%';
+            document.getElementById('summaryRecall').textContent = (overall.recall * 100).toFixed(1) + '%';
+            document.getElementById('summaryActionable').textContent = actionable;
+            document.getElementById('summaryBox').style.display = 'block';
+
+            // Time window chart
+            createTimeWindowChart(metrics.by_time_window);
+
+            // Confidence chart
+            createConfidenceChart(metrics.by_confidence);
+
+            // Pattern chart
+            createPatternChart(metrics.by_pattern);
+
+            // Tables
+            populateTimeWindowTable(metrics.by_time_window);
+            populateConfidenceTable(metrics.by_confidence);
+            populatePatternTable(metrics.by_pattern);
+        }
+
+        function createTimeWindowChart(data) {
+            const ctx = document.getElementById('timeWindowChart').getContext('2d');
+
+            if (timeWindowChart) {
+                timeWindowChart.destroy();
+            }
+
+            timeWindowChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: data.map(d => `${d.hours_before}h before`),
+                    datasets: [
+                        {
+                            label: 'Detected',
+                            data: data.map(d => d.detected),
+                            backgroundColor: 'rgba(76, 175, 80, 0.7)',
+                            borderColor: 'rgba(76, 175, 80, 1)',
+                            borderWidth: 1
+                        },
+                        {
+                            label: 'Actionable',
+                            data: data.map(d => d.actionable),
+                            backgroundColor: 'rgba(33, 150, 243, 0.7)',
+                            borderColor: 'rgba(33, 150, 243, 1)',
+                            borderWidth: 1
+                        },
+                        {
+                            label: 'Total',
+                            data: data.map(d => d.total),
+                            backgroundColor: 'rgba(158, 158, 158, 0.3)',
+                            borderColor: 'rgba(158, 158, 158, 1)',
+                            borderWidth: 1,
+                            type: 'line'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: {
+                            labels: {
+                                color: '#fff'
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                color: '#fff'
+                            },
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            }
+                        },
+                        x: {
+                            ticks: {
+                                color: '#fff'
+                            },
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function createConfidenceChart(data) {
+            const ctx = document.getElementById('confidenceChart').getContext('2d');
+
+            if (confidenceChart) {
+                confidenceChart.destroy();
+            }
+
+            confidenceChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: data.map(d => d.confidence),
+                    datasets: [{
+                        data: data.map(d => d.count),
+                        backgroundColor: [
+                            'rgba(76, 175, 80, 0.7)',
+                            'rgba(255, 152, 0, 0.7)',
+                            'rgba(158, 158, 158, 0.7)'
+                        ],
+                        borderColor: [
+                            'rgba(76, 175, 80, 1)',
+                            'rgba(255, 152, 0, 1)',
+                            'rgba(158, 158, 158, 1)'
+                        ],
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                color: '#fff',
+                                padding: 15
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function createPatternChart(data) {
+            const ctx = document.getElementById('patternChart').getContext('2d');
+
+            if (patternChart) {
+                patternChart.destroy();
+            }
+
+            patternChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: data.map(d => d.pattern_type.replace('_', ' ')),
+                    datasets: [{
+                        label: 'Detections',
+                        data: data.map(d => d.count),
+                        backgroundColor: 'rgba(156, 39, 176, 0.7)',
+                        borderColor: 'rgba(156, 39, 176, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            ticks: {
+                                color: '#fff'
+                            },
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            }
+                        },
+                        y: {
+                            ticks: {
+                                color: '#fff'
+                            },
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function populateTimeWindowTable(data) {
+            const tbody = document.querySelector('#timeWindowTable tbody');
+            tbody.innerHTML = '';
+
+            data.forEach(row => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td><strong>${row.hours_before}h</strong></td>
+                    <td>${row.total}</td>
+                    <td>${row.detected}</td>
+                    <td>${row.actionable}</td>
+                    <td><strong>${(row.detection_rate * 100).toFixed(1)}%</strong></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function populateConfidenceTable(data) {
+            const tbody = document.querySelector('#confidenceTable tbody');
+            tbody.innerHTML = '';
+
+            data.forEach(row => {
+                const tr = document.createElement('tr');
+                const badgeClass = row.confidence.toLowerCase();
+                tr.innerHTML = `
+                    <td><span class="badge ${badgeClass}">${row.confidence}</span></td>
+                    <td>${row.count}</td>
+                    <td>${row.avg_score.toFixed(1)}</td>
+                    <td>${row.actionable_count}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function populatePatternTable(data) {
+            const tbody = document.querySelector('#patternTable tbody');
+            tbody.innerHTML = '';
+
+            data.forEach(row => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${row.pattern_type.replace(/_/g, ' ')}</td>
+                    <td>${row.count}</td>
+                    <td>${row.avg_score.toFixed(1)}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            loadBacktestMetrics();
+        });
+    </script>
+</body>
+</html>

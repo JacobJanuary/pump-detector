@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pump Detection V2.0 - Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: #fff;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .header .subtitle {
+            font-size: 1.2em;
+            color: #a8d5ff;
+        }
+
+        .header .version {
+            display: inline-block;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            margin-top: 10px;
+        }
+
+        .nav {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .nav a {
+            padding: 10px 25px;
+            background: rgba(255, 255, 255, 0.15);
+            color: white;
+            text-decoration: none;
+            border-radius: 25px;
+            transition: all 0.3s;
+        }
+
+        .nav a:hover, .nav a.active {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .stat-card h3 {
+            font-size: 1em;
+            color: #a8d5ff;
+            margin-bottom: 10px;
+        }
+
+        .stat-card .value {
+            font-size: 2.5em;
+            font-weight: bold;
+        }
+
+        .stat-card .label {
+            font-size: 0.9em;
+            color: #ccc;
+            margin-top: 5px;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 30px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            max-width: 95%;
+            margin: 0 auto;
+        }
+
+        .table-wrapper {
+            overflow-x: auto;
+            margin-top: 20px;
+            width: 100%;
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .section-header h2 {
+            font-size: 1.8em;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .btn {
+            padding: 8px 20px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 0.9em;
+        }
+
+        .btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .btn.active {
+            background: #4CAF50;
+            border-color: #4CAF50;
+        }
+
+        .candidates-table {
+            width: 100%;
+            min-width: 1400px;
+            border-collapse: collapse;
+            margin-top: 0;
+        }
+
+        .candidates-table th {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+            color: #a8d5ff;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.2);
+            white-space: nowrap;
+        }
+
+        .candidates-table td {
+            padding: 15px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            white-space: nowrap;
+        }
+
+        .candidates-table tr:hover {
+            background: rgba(255, 255, 255, 0.05);
+            cursor: pointer;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 5px 12px;
+            border-radius: 15px;
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+
+        .badge.high {
+            background: #4CAF50;
+            color: white;
+        }
+
+        .badge.medium {
+            background: #FF9800;
+            color: white;
+        }
+
+        .badge.low {
+            background: #9E9E9E;
+            color: white;
+        }
+
+        .badge.actionable {
+            background: #2196F3;
+            color: white;
+        }
+
+        .badge.phase-early {
+            background: #4CAF50;
+            color: white;
+        }
+
+        .badge.phase-cooling {
+            background: #f44336;
+            color: white;
+        }
+
+        .badge.phase-second-wave {
+            background: #FF9800;
+            color: white;
+        }
+
+        .price-change-positive {
+            color: #4CAF50;
+            font-weight: 600;
+        }
+
+        .price-change-negative {
+            color: #f44336;
+            font-weight: 600;
+        }
+
+        .price-change-neutral {
+            color: #9E9E9E;
+        }
+
+        .pattern-badge {
+            background: rgba(156, 39, 176, 0.3);
+            border: 1px solid #9C27B0;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.8em;
+        }
+
+        .score {
+            font-size: 1.3em;
+            font-weight: bold;
+            color: #4CAF50;
+        }
+
+        .eta {
+            color: #FFC107;
+            font-weight: 600;
+        }
+
+        .timestamp {
+            color: #9E9E9E;
+            font-size: 0.85em;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            font-size: 1.2em;
+            color: #a8d5ff;
+        }
+
+        .error {
+            background: rgba(244, 67, 54, 0.2);
+            border: 1px solid #f44336;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+            color: #ffcdd2;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+        }
+
+        .empty-state svg {
+            width: 100px;
+            height: 100px;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+
+        .empty-state h3 {
+            font-size: 1.5em;
+            margin-bottom: 10px;
+            color: #a8d5ff;
+        }
+
+        .empty-state p {
+            color: #ccc;
+        }
+
+        .refresh-info {
+            text-align: center;
+            margin-top: 20px;
+            color: #a8d5ff;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Pump Detection System V2.0</h1>
+        <p class="subtitle">Real-time Pump Candidate Monitoring</p>
+        <span class="version">ENGINE V2.0</span>
+    </div>
+
+    <div class="nav">
+        <a href="/" class="active">Dashboard</a>
+        <a href="/backtest">Backtest Results</a>
+    </div>
+
+    <div class="stats-grid" id="statsGrid">
+        <div class="stat-card">
+            <h3>Active Candidates</h3>
+            <div class="value" id="totalCandidates">--</div>
+            <div class="label">Total alerts</div>
+        </div>
+        <div class="stat-card">
+            <h3>HIGH Confidence</h3>
+            <div class="value" id="highConfidence">--</div>
+            <div class="label">Ready to trade</div>
+        </div>
+        <div class="stat-card">
+            <h3>Actionable</h3>
+            <div class="value" id="actionableCount">--</div>
+            <div class="label">Immediate action</div>
+        </div>
+        <div class="stat-card">
+            <h3>Monitored Symbols</h3>
+            <div class="value" id="monitoredSymbols">--</div>
+            <div class="label">24h activity</div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="section-header">
+            <h2>Pump Candidates</h2>
+            <div class="controls">
+                <button class="btn active" id="btnHigh" onclick="filterConfidence('HIGH')">HIGH Only</button>
+                <button class="btn" id="btnAll" onclick="filterConfidence('ALL')">All</button>
+                <button class="btn" id="btnActionable" onclick="toggleActionable()">Actionable Only</button>
+                <button class="btn" id="btnHidePostPump" onclick="toggleHidePostPump()">Hide Post-Pump</button>
+                <button class="btn" onclick="refreshData()">Refresh</button>
+            </div>
+        </div>
+
+        <div id="candidatesContent">
+            <div class="loading">Loading candidates...</div>
+        </div>
+
+        <div class="refresh-info">
+            Auto-refresh every 30 seconds | Last update: <span id="lastUpdate">--</span>
+        </div>
+    </div>
+
+    <script>
+        let currentFilter = 'HIGH';
+        let actionableOnly = false;
+        let hidePostPump = false;
+        let autoRefreshInterval;
+
+        async function loadCandidates() {
+            try {
+                const params = new URLSearchParams({
+                    min_confidence: currentFilter,
+                    actionable_only: actionableOnly,
+                    limit: 50
+                });
+
+                const response = await fetch(`/api/v2/candidates?${params}`);
+                const data = await response.json();
+
+                if (!data.success) {
+                    throw new Error(data.error || 'Failed to load candidates');
+                }
+
+                displayCandidates(data.candidates);
+                updateLastUpdate();
+
+            } catch (error) {
+                console.error('Error loading candidates:', error);
+                document.getElementById('candidatesContent').innerHTML = `
+                    <div class="error">Error loading candidates: ${error.message}</div>
+                `;
+            }
+        }
+
+        async function loadHealth() {
+            try {
+                const response = await fetch('/api/v2/health');
+                const data = await response.json();
+
+                if (data.success) {
+                    document.getElementById('totalCandidates').textContent =
+                        data.candidates.active || 0;
+                    document.getElementById('highConfidence').textContent =
+                        data.candidates.high_confidence || 0;
+                    document.getElementById('actionableCount').textContent =
+                        data.candidates.actionable || 0;
+                    document.getElementById('monitoredSymbols').textContent =
+                        data.database.monitored_symbols || 0;
+                }
+            } catch (error) {
+                console.error('Error loading health:', error);
+            }
+        }
+
+        function displayCandidates(candidates) {
+            const content = document.getElementById('candidatesContent');
+
+            // Filter out POST_PUMP_COOLING if hidePostPump is enabled
+            if (hidePostPump && candidates) {
+                candidates = candidates.filter(c => c.pump_phase !== 'POST_PUMP_COOLING');
+            }
+
+            if (!candidates || candidates.length === 0) {
+                content.innerHTML = `
+                    <div class="empty-state">
+                        <svg fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"/>
+                        </svg>
+                        <h3>No Candidates Found</h3>
+                        <p>No pump candidates matching your filters at this time.</p>
+                        <p style="margin-top: 10px;">Try changing filters or wait for new signals.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            let tableHTML = `
+                <div class="table-wrapper">
+                <table class="candidates-table">
+                    <thead>
+                        <tr>
+                            <th>Symbol</th>
+                            <th>Confidence</th>
+                            <th>Score</th>
+                            <th>Pattern</th>
+                            <th>Phase</th>
+                            <th>Price↑</th>
+                            <th>24h%</th>
+                            <th>Last Pump</th>
+                            <th>Signals</th>
+                            <th>Critical Window</th>
+                            <th>ETA</th>
+                            <th>Status</th>
+                            <th>Analyzed</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            candidates.forEach(candidate => {
+                const updatedTime = new Date(candidate.last_updated_at).toLocaleString();
+                const etaText = candidate.eta_hours ? `${candidate.eta_hours}h` : 'N/A';
+                const confidenceClass = candidate.confidence.toLowerCase();
+
+                // Pump phase formatting
+                let phaseClass = 'phase-early';
+                let phaseText = 'EARLY';
+                let phaseIcon = '🟢';
+                if (candidate.pump_phase === 'POST_PUMP_COOLING') {
+                    phaseClass = 'phase-cooling';
+                    phaseText = 'POST-PUMP';
+                    phaseIcon = '🔴';
+                } else if (candidate.pump_phase === 'SECOND_WAVE_POTENTIAL') {
+                    phaseClass = 'phase-second-wave';
+                    phaseText = '2ND WAVE';
+                    phaseIcon = '🟡';
+                }
+
+                // Price change from first signal
+                const priceFromFirst = candidate.price_change_from_first;
+                let priceFromFirstHtml = '<span class="price-change-neutral">N/A</span>';
+                if (priceFromFirst !== null && priceFromFirst !== undefined) {
+                    const priceClass = priceFromFirst > 0 ? 'price-change-positive' :
+                                      priceFromFirst < 0 ? 'price-change-negative' : 'price-change-neutral';
+                    const sign = priceFromFirst > 0 ? '+' : '';
+                    priceFromFirstHtml = `<span class="${priceClass}">${sign}${priceFromFirst.toFixed(1)}%</span>`;
+                }
+
+                // Price change 24h
+                const price24h = candidate.price_change_24h;
+                let price24hHtml = '<span class="price-change-neutral">N/A</span>';
+                if (price24h !== null && price24h !== undefined) {
+                    const priceClass = price24h > 0 ? 'price-change-positive' :
+                                      price24h < 0 ? 'price-change-negative' : 'price-change-neutral';
+                    const sign = price24h > 0 ? '+' : '';
+                    price24hHtml = `<span class="${priceClass}">${sign}${price24h.toFixed(1)}%</span>`;
+                }
+
+                // Hours since last pump
+                const hoursSincePump = candidate.hours_since_last_pump;
+                let pumpTimeHtml = '<span class="price-change-neutral">Never</span>';
+                if (hoursSincePump !== null && hoursSincePump !== undefined) {
+                    if (hoursSincePump < 72) {
+                        pumpTimeHtml = `<span style="color: #f44336; font-weight: 600;">${hoursSincePump}h ago</span>`;
+                    } else if (hoursSincePump < 168) {
+                        pumpTimeHtml = `<span style="color: #FF9800;">${Math.floor(hoursSincePump / 24)}d ago</span>`;
+                    } else {
+                        pumpTimeHtml = `<span style="color: #4CAF50;">${Math.floor(hoursSincePump / 24)}d ago</span>`;
+                    }
+                }
+
+                tableHTML += `
+                    <tr onclick="viewDetails('${candidate.symbol}')">
+                        <td><strong>${candidate.symbol}</strong></td>
+                        <td><span class="badge ${confidenceClass}">${candidate.confidence}</span></td>
+                        <td><span class="score">${candidate.score.toFixed(1)}</span></td>
+                        <td><span class="pattern-badge">${candidate.pattern_type}</span></td>
+                        <td><span class="badge ${phaseClass}">${phaseIcon} ${phaseText}</span></td>
+                        <td>${priceFromFirstHtml}</td>
+                        <td>${price24hHtml}</td>
+                        <td>${pumpTimeHtml}</td>
+                        <td>
+                            <strong>${candidate.total_signals}</strong> total
+                            ${candidate.extreme_signals > 0 ? `<br><span style="color: #f44336;">${candidate.extreme_signals} extreme</span>` : ''}
+                        </td>
+                        <td><strong>${candidate.critical_window_signals}</strong> signals</td>
+                        <td><span class="eta">${etaText}</span></td>
+                        <td>
+                            ${candidate.is_actionable ? '<span class="badge actionable">ACTIONABLE</span>' : '<span style="color: #9E9E9E;">Watch</span>'}
+                        </td>
+                        <td><span class="timestamp">${updatedTime}</span></td>
+                    </tr>
+                `;
+            });
+
+            tableHTML += `
+                    </tbody>
+                </table>
+                </div>
+            `;
+
+            content.innerHTML = tableHTML;
+        }
+
+        function viewDetails(symbol) {
+            window.location.href = `/candidate/${symbol}`;
+        }
+
+        function filterConfidence(filter) {
+            currentFilter = filter;
+
+            document.getElementById('btnHigh').classList.remove('active');
+            document.getElementById('btnAll').classList.remove('active');
+
+            if (filter === 'HIGH') {
+                document.getElementById('btnHigh').classList.add('active');
+            } else {
+                document.getElementById('btnAll').classList.add('active');
+            }
+
+            loadCandidates();
+        }
+
+        function toggleActionable() {
+            actionableOnly = !actionableOnly;
+            const btn = document.getElementById('btnActionable');
+
+            if (actionableOnly) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+
+            loadCandidates();
+        }
+
+        function toggleHidePostPump() {
+            hidePostPump = !hidePostPump;
+            const btn = document.getElementById('btnHidePostPump');
+
+            if (hidePostPump) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+
+            loadCandidates();
+        }
+
+        function refreshData() {
+            loadCandidates();
+            loadHealth();
+        }
+
+        function updateLastUpdate() {
+            const now = new Date();
+            document.getElementById('lastUpdate').textContent = now.toLocaleTimeString();
+        }
+
+        function startAutoRefresh() {
+            autoRefreshInterval = setInterval(() => {
+                refreshData();
+            }, 30000); // 30 seconds
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            refreshData();
+            startAutoRefresh();
+        });
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+            }
+        });
+    </script>
+</body>
+</html>

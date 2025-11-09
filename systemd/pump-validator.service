@@ -1,0 +1,21 @@
+[Unit]
+Description=Pump Signal Validator Daemon
+After=network.target postgresql.service pump-detector.service
+Requires=postgresql.service
+
+[Service]
+Type=simple
+User=elcrypto
+Group=elcrypto
+WorkingDirectory=/home/elcrypto/pump_detector
+Environment="PYTHONPATH=/home/elcrypto/pump_detector"
+ExecStart=/home/elcrypto/pump_detector/venv/bin/python3 /home/elcrypto/pump_detector/daemons/validator_daemon.py
+ExecReload=/bin/kill -HUP $MAINPID
+KillMode=process
+Restart=on-failure
+RestartSec=30s
+StandardOutput=append:/home/elcrypto/pump_detector/logs/validator.log
+StandardError=append:/home/elcrypto/pump_detector/logs/validator_error.log
+
+[Install]
+WantedBy=multi-user.target

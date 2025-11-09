@@ -1,0 +1,289 @@
+{% extends "base.html" %}
+
+{% block title %}Reports - Pump Detection System{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h2 class="text-light">
+            <i class="bi bi-file-earmark-text"></i> Reports & Export
+        </h2>
+        <p class="text-secondary">Generate detailed reports and export data</p>
+    </div>
+</div>
+
+<!-- Quick Export -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5>Quick Export</h5>
+    </div>
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-4">
+                <button class="btn btn-primary w-100" onclick="exportData('active')">
+                    <i class="bi bi-download"></i> Export Active Signals
+                </button>
+            </div>
+            <div class="col-md-4">
+                <button class="btn btn-primary w-100" onclick="exportData('history')">
+                    <i class="bi bi-download"></i> Export History (30 days)
+                </button>
+            </div>
+            <div class="col-md-4">
+                <button class="btn btn-primary w-100" onclick="exportData('performance')">
+                    <i class="bi bi-download"></i> Export Performance Report
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Custom Report Generator -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5>Custom Report Generator</h5>
+    </div>
+    <div class="card-body">
+        <form id="report-form">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">Report Type</label>
+                    <select class="form-select" id="report-type">
+                        <option value="signals">Signals Report</option>
+                        <option value="performance">Performance Analysis</option>
+                        <option value="pairs">Pairs Analysis</option>
+                        <option value="daily">Daily Summary</option>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Date Range</label>
+                    <div class="input-group">
+                        <input type="date" class="form-control" id="date-from">
+                        <span class="input-group-text">to</span>
+                        <input type="date" class="form-control" id="date-to">
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Format</label>
+                    <select class="form-select" id="export-format">
+                        <option value="csv">CSV</option>
+                        <option value="json">JSON</option>
+                        <option value="excel">Excel</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Include</label>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="include-charts" checked>
+                        <label class="form-check-label" for="include-charts">Charts & Graphs</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="include-details" checked>
+                        <label class="form-check-label" for="include-details">Detailed Metrics</label>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">&nbsp;</label>
+                    <button type="submit" class="btn btn-success w-100">
+                        <i class="bi bi-file-earmark-arrow-down"></i> Generate Report
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Recent Reports -->
+<div class="card">
+    <div class="card-header">
+        <h5>Recent Reports</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Report Name</th>
+                        <th>Type</th>
+                        <th>Generated</th>
+                        <th>Size</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="reports-list">
+                    <tr>
+                        <td>daily_summary_2024_01_15.csv</td>
+                        <td>Daily Summary</td>
+                        <td>Today, 09:00 AM</td>
+                        <td>24 KB</td>
+                        <td>
+                            <button class="btn btn-sm btn-primary">
+                                <i class="bi bi-download"></i>
+                            </button>
+                            <button class="btn btn-sm btn-danger">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>performance_analysis_week_02.json</td>
+                        <td>Performance</td>
+                        <td>Yesterday, 06:00 PM</td>
+                        <td>156 KB</td>
+                        <td>
+                            <button class="btn btn-sm btn-primary">
+                                <i class="bi bi-download"></i>
+                            </button>
+                            <button class="btn btn-sm btn-danger">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Report Preview Modal -->
+<div class="modal fade" id="reportPreviewModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Report Preview</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="report-preview">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-success" onclick="downloadReport()">
+                    <i class="bi bi-download"></i> Download
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Set default dates
+    const today = new Date();
+    const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, today.getDate());
+
+    document.getElementById('date-to').value = today.toISOString().split('T')[0];
+    document.getElementById('date-from').value = lastMonth.toISOString().split('T')[0];
+
+    document.getElementById('report-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        generateReport();
+    });
+});
+
+async function exportData(type) {
+    try {
+        let endpoint = '';
+        let filename = '';
+
+        switch(type) {
+            case 'active':
+                endpoint = '/signals/active';
+                filename = `active_signals_${new Date().toISOString().split('T')[0]}.csv`;
+                break;
+            case 'history':
+                endpoint = '/signals/history?days=30';
+                filename = `signal_history_30d_${new Date().toISOString().split('T')[0]}.csv`;
+                break;
+            case 'performance':
+                endpoint = '/analytics/performance?days=30';
+                filename = `performance_report_${new Date().toISOString().split('T')[0]}.csv`;
+                break;
+        }
+
+        const data = await fetchAPI(endpoint);
+        const csv = convertToCSV(data.signals || data);
+        downloadFile(csv, filename, 'text/csv');
+
+    } catch (error) {
+        console.error('Error exporting data:', error);
+        alert('Failed to export data');
+    }
+}
+
+function generateReport() {
+    const reportType = document.getElementById('report-type').value;
+    const dateFrom = document.getElementById('date-from').value;
+    const dateTo = document.getElementById('date-to').value;
+    const format = document.getElementById('export-format').value;
+
+    // Show preview
+    const preview = document.getElementById('report-preview');
+    preview.innerHTML = `
+        <h5>Report: ${reportType}</h5>
+        <p>Date Range: ${dateFrom} to ${dateTo}</p>
+        <p>Format: ${format.toUpperCase()}</p>
+        <hr>
+        <p class="text-center text-muted">
+            <i class="bi bi-hourglass-split"></i> Generating report...
+        </p>
+    `;
+
+    const modal = new bootstrap.Modal(document.getElementById('reportPreviewModal'));
+    modal.show();
+
+    // Simulate report generation
+    setTimeout(() => {
+        preview.innerHTML += `
+            <div class="alert alert-success">
+                <i class="bi bi-check-circle"></i> Report generated successfully!
+            </div>
+        `;
+    }, 2000);
+}
+
+function convertToCSV(data) {
+    if (!data || (Array.isArray(data) && data.length === 0)) {
+        return '';
+    }
+
+    // Handle both array and object data
+    const items = Array.isArray(data) ? data : [data];
+    const headers = Object.keys(items[0]);
+
+    const csv = [
+        headers.join(','),
+        ...items.map(item =>
+            headers.map(header => {
+                const value = item[header];
+                return typeof value === 'string' && value.includes(',') ?
+                    `"${value}"` : value;
+            }).join(',')
+        )
+    ].join('\n');
+
+    return csv;
+}
+
+function downloadFile(content, filename, mimeType) {
+    const blob = new Blob([content], { type: mimeType });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+}
+
+function downloadReport() {
+    const format = document.getElementById('export-format').value;
+    const reportType = document.getElementById('report-type').value;
+    const filename = `${reportType}_report_${new Date().toISOString().split('T')[0]}.${format}`;
+
+    alert(`Downloading ${filename}...`);
+}
+</script>
+{% endblock %}
