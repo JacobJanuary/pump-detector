@@ -157,6 +157,37 @@ def candidate_details(symbol):
 
             signals = cur.fetchall()
 
+            # Get technical indicators (4h timeframe)
+            cur.execute("""
+                SELECT
+                    buy_ratio,
+                    volume_zscore,
+                    oi_delta_pct,
+                    timestamp
+                FROM fas_v2.indicators
+                WHERE trading_pair_id = %s
+                  AND timeframe = '4h'
+                ORDER BY timestamp DESC
+                LIMIT 1
+            """, (candidate['trading_pair_id'],))
+
+            indicators = cur.fetchone()
+
+            # Get POC levels
+            cur.execute("""
+                SELECT
+                    poc_24h,
+                    poc_7d,
+                    poc_30d,
+                    calculated_at
+                FROM fas_v2.poc_levels
+                WHERE trading_pair_id = %s
+                ORDER BY calculated_at DESC
+                LIMIT 1
+            """, (candidate['trading_pair_id'],))
+
+            poc_levels = cur.fetchone()
+
         conn.close()
 
         # 2-column HTML page with candidate details and charts
@@ -206,6 +237,19 @@ def candidate_details(symbol):
         .spike-high {{ color: #f44336; font-weight: bold; }}
         .spike-medium {{ color: #FF9800; font-weight: bold; }}
         .baseline-info {{ color: #666; }}
+
+        /* POC and Indicators section */
+        .analytics-section {{ grid-column: 1 / -1; background: white; padding: 20px; border-radius: 8px; margin-top: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }}
+        .analytics-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 15px; }}
+        .analytics-card {{ background: #f9f9f9; padding: 15px; border-radius: 6px; border-left: 4px solid #2196F3; }}
+        .analytics-card h3 {{ margin: 0 0 12px 0; color: #1e3c72; font-size: 1em; }}
+        .analytics-item {{ display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #e0e0e0; }}
+        .analytics-item:last-child {{ border-bottom: none; }}
+        .analytics-label {{ font-weight: 600; color: #666; font-size: 0.9em; }}
+        .analytics-value {{ color: #333; font-size: 0.9em; font-weight: 600; }}
+        .analytics-value.positive {{ color: #4CAF50; }}
+        .analytics-value.negative {{ color: #f44336; }}
+        .analytics-meta {{ font-size: 0.8em; color: #999; margin-top: 10px; }}
     </style>
 </head>
 <body>
@@ -296,6 +340,30 @@ def candidate_details(symbol):
             <div class="chart-title" style="margin-top: 40px;">Volume (Last 30 Days - Hourly)</div>
             <div class="chart-container">
                 <canvas id="volumeChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Analytics section (POC + Indicators) -->
+    <div class="analytics-section">
+        <h2 style="margin-top: 0; color: #1e3c72;">Analytics (POC Levels & Technical Indicators)</h2>
+        <div class="analytics-grid">
+            <!-- POC Levels Card -->
+            <div class="analytics-card">
+                <h3>POC (Point of Control) Levels</h3>
+                {'<div class="analytics-item"><span class="analytics-label">POC 24h:</span><span class="analytics-value">$' + f"{poc_levels['poc_24h']:.8f}" + '</span></div>' if poc_levels and poc_levels.get('poc_24h') else '<p style="color: #999; font-style: italic; margin: 0;">No data</p>'}
+                {'<div class="analytics-item"><span class="analytics-label">POC 7d:</span><span class="analytics-value">$' + f"{poc_levels['poc_7d']:.8f}" + '</span></div>' if poc_levels and poc_levels.get('poc_7d') else ''}
+                {'<div class="analytics-item"><span class="analytics-label">POC 30d:</span><span class="analytics-value">$' + f"{poc_levels['poc_30d']:.8f}" + '</span></div>' if poc_levels and poc_levels.get('poc_30d') else ''}
+                {'<div class="analytics-meta">Updated: ' + poc_levels['calculated_at'].strftime('%Y-%m-%d %H:%M') + '</div>' if poc_levels and poc_levels.get('calculated_at') else ''}
+            </div>
+
+            <!-- Technical Indicators Card -->
+            <div class="analytics-card">
+                <h3>Technical Indicators (4h)</h3>
+                {'<div class="analytics-item"><span class="analytics-label">Buy Ratio:</span><span class="analytics-value ' + ('positive' if indicators.get('buy_ratio', 0) > 0.5 else 'negative') + '">' + f"{indicators['buy_ratio']*100:.2f}%" + '</span></div>' if indicators and indicators.get('buy_ratio') is not None else '<p style="color: #999; font-style: italic; margin: 0;">No data</p>'}
+                {'<div class="analytics-item"><span class="analytics-label">Volume Z-Score:</span><span class="analytics-value ' + ('positive' if indicators.get('volume_zscore', 0) > 2 else '') + '">' + f"{indicators['volume_zscore']:.2f}" + '</span></div>' if indicators and indicators.get('volume_zscore') is not None else ''}
+                {'<div class="analytics-item"><span class="analytics-label">OI Delta %:</span><span class="analytics-value ' + ('positive' if indicators.get('oi_delta_pct', 0) > 0 else 'negative') + '">' + f"{indicators['oi_delta_pct']:.2f}%" + '</span></div>' if indicators and indicators.get('oi_delta_pct') is not None else ''}
+                {'<div class="analytics-meta">Updated: ' + indicators['timestamp'].strftime('%Y-%m-%d %H:%M') + '</div>' if indicators and indicators.get('timestamp') else ''}
             </div>
         </div>
     </div>
