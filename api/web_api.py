@@ -550,7 +550,7 @@ def get_candidates():
     try:
         min_confidence = request.args.get('min_confidence', 'HIGH').upper()
         actionable_only = request.args.get('actionable_only', 'true').lower() == 'true'
-        limit = int(request.args.get('limit', 50))
+        limit = int(request.args.get('limit', 1000))
 
         conn = get_db_connection()
         with conn.cursor() as cur:
