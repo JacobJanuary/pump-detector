@@ -7,6 +7,11 @@ Changes from V1:
 - Writes to pump.raw_signals instead of pump.signals
 - Removed confidence scoring (now done by PumpDetectionEngine)
 - Simplified to focus on signal detection only
+
+Filters Applied:
+- Excludes meme coins (using public.is_meme_coin)
+- Excludes stablecoins (using public.is_stablecoin_pair)
+- Excludes tokens with market cap < $100M
 """
 
 import time
@@ -172,8 +177,9 @@ class PumpDetectorDaemon:
               AND tp.contract_type_id = 1  -- Futures
               AND c.interval_id = 4  -- 4h
               AND to_timestamp(c.open_time / 1000) >= NOW() - INTERVAL '30 days'
-              -- FILTERS: Exclude meme coins and low market cap
+              -- FILTERS: Exclude meme coins, stablecoins and low market cap
               AND NOT public.is_meme_coin(tp.id)
+              AND NOT public.is_stablecoin_pair(tp.id)
               AND EXISTS (
                   SELECT 1 FROM public.tokens t
                   JOIN public.cmc_crypto cmc ON t.cmc_token_id = cmc.cmc_token_id
@@ -234,7 +240,7 @@ class PumpDetectorDaemon:
 
                 futures_count = 0
                 if anomalies:
-                    logger.info(f"Found {len(anomalies)} new FUTURES anomalies")
+                    logger.info(f"Found {len(anomalies)} new FUTURES anomalies (memes, stablecoins, low-cap filtered)")
 
                     for anomaly in anomalies:
                         # Classify signal strength
@@ -318,8 +324,9 @@ class PumpDetectorDaemon:
               AND tp.contract_type_id = 2  -- Spot
               AND c.interval_id = 4  -- 4h
               AND to_timestamp(c.open_time / 1000) >= NOW() - INTERVAL '30 days'
-              -- FILTERS: Exclude meme coins and low market cap
+              -- FILTERS: Exclude meme coins, stablecoins and low market cap
               AND NOT public.is_meme_coin(tp.id)
+              AND NOT public.is_stablecoin_pair(tp.id)
               AND EXISTS (
                   SELECT 1 FROM public.tokens t
                   JOIN public.cmc_crypto cmc ON t.cmc_token_id = cmc.cmc_token_id
@@ -380,7 +387,7 @@ class PumpDetectorDaemon:
 
                 spot_count = 0
                 if anomalies:
-                    logger.info(f"Found {len(anomalies)} new SPOT anomalies")
+                    logger.info(f"Found {len(anomalies)} new SPOT anomalies (memes, stablecoins, low-cap filtered)")
 
                     for anomaly in anomalies:
                         # Classify signal strength
@@ -576,6 +583,7 @@ class PumpDetectorDaemon:
         logger.info(f"Lookback period: {self.lookback_hours} hours ({self.lookback_hours/24:.1f} days)")
         logger.info(f"Min spike ratio: {self.detection_config.get('min_spike_ratio', 1.5)}x")
         logger.info(f"Writing to: pump.raw_signals")
+        logger.info(f"Filters enabled: meme coins, stablecoins, market cap < $100M")
 
         if not self.historical_mode and not self.once_mode:
             logger.info(f"Detection interval: {self.detection_config.get('interval_minutes', 5)} minutes")

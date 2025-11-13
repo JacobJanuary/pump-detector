@@ -168,6 +168,32 @@
             color: #a8d5ff;
             border-bottom: 2px solid rgba(255, 255, 255, 0.2);
             white-space: nowrap;
+            cursor: pointer;
+            user-select: none;
+            position: relative;
+            transition: background 0.2s;
+        }
+
+        .candidates-table th:hover {
+            background: rgba(0, 0, 0, 0.4);
+        }
+
+        .candidates-table th.sortable::after {
+            content: ' ↕';
+            color: rgba(255, 255, 255, 0.4);
+            font-size: 0.9em;
+        }
+
+        .candidates-table th.sort-asc::after {
+            content: ' ↑';
+            color: #4CAF50;
+            font-weight: bold;
+        }
+
+        .candidates-table th.sort-desc::after {
+            content: ' ↓';
+            color: #4CAF50;
+            font-weight: bold;
         }
 
         .candidates-table td {
@@ -369,13 +395,15 @@
         let actionableOnly = false;
         let hidePostPump = false;
         let autoRefreshInterval;
+        let currentSortColumn = null;
+        let currentSortDirection = 'asc';
+        let candidatesData = [];
 
         async function loadCandidates() {
             try {
                 const params = new URLSearchParams({
                     min_confidence: currentFilter,
-                    actionable_only: actionableOnly,
-                    limit: 50
+                    actionable_only: actionableOnly
                 });
 
                 const response = await fetch(`/api/v2/candidates?${params}`);
@@ -419,12 +447,15 @@
         function displayCandidates(candidates) {
             const content = document.getElementById('candidatesContent');
 
+            // Store candidates data globally for sorting
+            candidatesData = candidates || [];
+
             // Filter out POST_PUMP_COOLING if hidePostPump is enabled
-            if (hidePostPump && candidates) {
-                candidates = candidates.filter(c => c.pump_phase !== 'POST_PUMP_COOLING');
+            if (hidePostPump && candidatesData) {
+                candidatesData = candidatesData.filter(c => c.pump_phase !== 'POST_PUMP_COOLING');
             }
 
-            if (!candidates || candidates.length === 0) {
+            if (!candidatesData || candidatesData.length === 0) {
                 content.innerHTML = `
                     <div class="empty-state">
                         <svg fill="currentColor" viewBox="0 0 20 20">
@@ -438,30 +469,200 @@
                 return;
             }
 
+            // Render the table with sorting
+            renderTable();
+        }
+
+        function viewDetails(symbol) {
+            window.location.href = `/candidate/${symbol}`;
+        }
+
+        function filterConfidence(filter) {
+            currentFilter = filter;
+
+            document.getElementById('btnHigh').classList.remove('active');
+            document.getElementById('btnAll').classList.remove('active');
+
+            if (filter === 'HIGH') {
+                document.getElementById('btnHigh').classList.add('active');
+            } else {
+                document.getElementById('btnAll').classList.add('active');
+            }
+
+            loadCandidates();
+        }
+
+        function toggleActionable() {
+            actionableOnly = !actionableOnly;
+            const btn = document.getElementById('btnActionable');
+
+            if (actionableOnly) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+
+            loadCandidates();
+        }
+
+        function toggleHidePostPump() {
+            hidePostPump = !hidePostPump;
+            const btn = document.getElementById('btnHidePostPump');
+
+            if (hidePostPump) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+
+            loadCandidates();
+        }
+
+        function refreshData() {
+            loadCandidates();
+            loadHealth();
+        }
+
+        function updateLastUpdate() {
+            const now = new Date();
+            document.getElementById('lastUpdate').textContent = now.toLocaleTimeString();
+        }
+
+        function handleSort(column) {
+            // Toggle direction if clicking the same column
+            if (currentSortColumn === column) {
+                currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                currentSortColumn = column;
+                currentSortDirection = 'asc';
+            }
+
+            renderTable();
+        }
+
+        function sortCandidates(column, direction) {
+            candidatesData.sort((a, b) => {
+                let valA, valB;
+
+                switch(column) {
+                    case 'symbol':
+                        valA = a.symbol || '';
+                        valB = b.symbol || '';
+                        return direction === 'asc'
+                            ? valA.localeCompare(valB)
+                            : valB.localeCompare(valA);
+
+                    case 'confidence':
+                        const confidenceOrder = { 'HIGH': 3, 'MEDIUM': 2, 'LOW': 1 };
+                        valA = confidenceOrder[a.confidence] || 0;
+                        valB = confidenceOrder[b.confidence] || 0;
+                        return direction === 'asc' ? valA - valB : valB - valA;
+
+                    case 'score':
+                        valA = a.score || 0;
+                        valB = b.score || 0;
+                        return direction === 'asc' ? valA - valB : valB - valA;
+
+                    case 'pattern':
+                        valA = a.pattern_type || '';
+                        valB = b.pattern_type || '';
+                        return direction === 'asc'
+                            ? valA.localeCompare(valB)
+                            : valB.localeCompare(valA);
+
+                    case 'phase':
+                        const phaseOrder = {
+                            'EARLY_BUILDUP': 1,
+                            'SECOND_WAVE_POTENTIAL': 2,
+                            'POST_PUMP_COOLING': 3
+                        };
+                        valA = phaseOrder[a.pump_phase] || 0;
+                        valB = phaseOrder[b.pump_phase] || 0;
+                        return direction === 'asc' ? valA - valB : valB - valA;
+
+                    case 'price_change':
+                        valA = a.price_change_from_first ?? -Infinity;
+                        valB = b.price_change_from_first ?? -Infinity;
+                        return direction === 'asc' ? valA - valB : valB - valA;
+
+                    case 'price_24h':
+                        valA = a.price_change_24h ?? -Infinity;
+                        valB = b.price_change_24h ?? -Infinity;
+                        return direction === 'asc' ? valA - valB : valB - valA;
+
+                    case 'last_pump':
+                        valA = a.hours_since_last_pump ?? Infinity;
+                        valB = b.hours_since_last_pump ?? Infinity;
+                        return direction === 'asc' ? valA - valB : valB - valA;
+
+                    case 'signals':
+                        valA = a.total_signals || 0;
+                        valB = b.total_signals || 0;
+                        return direction === 'asc' ? valA - valB : valB - valA;
+
+                    case 'critical_window':
+                        valA = a.critical_window_signals || 0;
+                        valB = b.critical_window_signals || 0;
+                        return direction === 'asc' ? valA - valB : valB - valA;
+
+                    case 'eta':
+                        valA = a.eta_hours ?? Infinity;
+                        valB = b.eta_hours ?? Infinity;
+                        return direction === 'asc' ? valA - valB : valB - valA;
+
+                    case 'status':
+                        valA = a.is_actionable ? 1 : 0;
+                        valB = b.is_actionable ? 1 : 0;
+                        return direction === 'asc' ? valA - valB : valB - valA;
+
+                    case 'analyzed':
+                        valA = new Date(a.last_updated_at).getTime() || 0;
+                        valB = new Date(b.last_updated_at).getTime() || 0;
+                        return direction === 'asc' ? valA - valB : valB - valA;
+
+                    default:
+                        return 0;
+                }
+            });
+        }
+
+        function renderTable() {
+            // Re-render the table with current candidatesData
+            const content = document.getElementById('candidatesContent');
+
+            if (!candidatesData || candidatesData.length === 0) {
+                return;
+            }
+
+            // Apply sorting
+            if (currentSortColumn !== null) {
+                sortCandidates(currentSortColumn, currentSortDirection);
+            }
+
             let tableHTML = `
                 <div class="table-wrapper">
                 <table class="candidates-table">
                     <thead>
                         <tr>
-                            <th>Symbol</th>
-                            <th>Confidence</th>
-                            <th>Score</th>
-                            <th>Pattern</th>
-                            <th>Phase</th>
-                            <th>Price↑</th>
-                            <th>24h%</th>
-                            <th>Last Pump</th>
-                            <th>Signals</th>
-                            <th>Critical Window</th>
-                            <th>ETA</th>
-                            <th>Status</th>
-                            <th>Analyzed</th>
+                            <th class="sortable ${currentSortColumn === 'symbol' ? 'sort-' + currentSortDirection : ''}" onclick="handleSort('symbol')">Symbol</th>
+                            <th class="sortable ${currentSortColumn === 'confidence' ? 'sort-' + currentSortDirection : ''}" onclick="handleSort('confidence')">Confidence</th>
+                            <th class="sortable ${currentSortColumn === 'score' ? 'sort-' + currentSortDirection : ''}" onclick="handleSort('score')">Score</th>
+                            <th class="sortable ${currentSortColumn === 'pattern' ? 'sort-' + currentSortDirection : ''}" onclick="handleSort('pattern')">Pattern</th>
+                            <th class="sortable ${currentSortColumn === 'phase' ? 'sort-' + currentSortDirection : ''}" onclick="handleSort('phase')">Phase</th>
+                            <th class="sortable ${currentSortColumn === 'price_change' ? 'sort-' + currentSortDirection : ''}" onclick="handleSort('price_change')">Price↑</th>
+                            <th class="sortable ${currentSortColumn === 'price_24h' ? 'sort-' + currentSortDirection : ''}" onclick="handleSort('price_24h')">24h%</th>
+                            <th class="sortable ${currentSortColumn === 'last_pump' ? 'sort-' + currentSortDirection : ''}" onclick="handleSort('last_pump')">Last Pump</th>
+                            <th class="sortable ${currentSortColumn === 'signals' ? 'sort-' + currentSortDirection : ''}" onclick="handleSort('signals')">Signals</th>
+                            <th class="sortable ${currentSortColumn === 'critical_window' ? 'sort-' + currentSortDirection : ''}" onclick="handleSort('critical_window')">Critical Window</th>
+                            <th class="sortable ${currentSortColumn === 'eta' ? 'sort-' + currentSortDirection : ''}" onclick="handleSort('eta')">ETA</th>
+                            <th class="sortable ${currentSortColumn === 'status' ? 'sort-' + currentSortDirection : ''}" onclick="handleSort('status')">Status</th>
+                            <th class="sortable ${currentSortColumn === 'analyzed' ? 'sort-' + currentSortDirection : ''}" onclick="handleSort('analyzed')">Analyzed</th>
                         </tr>
                     </thead>
                     <tbody>
             `;
 
-            candidates.forEach(candidate => {
+            candidatesData.forEach(candidate => {
                 const updatedTime = new Date(candidate.last_updated_at).toLocaleString();
                 const etaText = candidate.eta_hours ? `${candidate.eta_hours}h` : 'N/A';
                 const confidenceClass = candidate.confidence.toLowerCase();
@@ -544,61 +745,6 @@
             `;
 
             content.innerHTML = tableHTML;
-        }
-
-        function viewDetails(symbol) {
-            window.location.href = `/candidate/${symbol}`;
-        }
-
-        function filterConfidence(filter) {
-            currentFilter = filter;
-
-            document.getElementById('btnHigh').classList.remove('active');
-            document.getElementById('btnAll').classList.remove('active');
-
-            if (filter === 'HIGH') {
-                document.getElementById('btnHigh').classList.add('active');
-            } else {
-                document.getElementById('btnAll').classList.add('active');
-            }
-
-            loadCandidates();
-        }
-
-        function toggleActionable() {
-            actionableOnly = !actionableOnly;
-            const btn = document.getElementById('btnActionable');
-
-            if (actionableOnly) {
-                btn.classList.add('active');
-            } else {
-                btn.classList.remove('active');
-            }
-
-            loadCandidates();
-        }
-
-        function toggleHidePostPump() {
-            hidePostPump = !hidePostPump;
-            const btn = document.getElementById('btnHidePostPump');
-
-            if (hidePostPump) {
-                btn.classList.add('active');
-            } else {
-                btn.classList.remove('active');
-            }
-
-            loadCandidates();
-        }
-
-        function refreshData() {
-            loadCandidates();
-            loadHealth();
-        }
-
-        function updateLastUpdate() {
-            const now = new Date();
-            document.getElementById('lastUpdate').textContent = now.toLocaleTimeString();
         }
 
         function startAutoRefresh() {
