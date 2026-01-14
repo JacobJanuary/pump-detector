@@ -28,7 +28,7 @@ def setup_test_data():
     """Insert fake EXTREME signals for SPOT and FUTURES"""
     conn = psycopg2.connect(**DATABASE)
     conn.autocommit = True
-    cur = conn.cursor()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
 
     # Get a valid trading_pair_id to satisfy FK constraint
     cur.execute("SELECT id FROM trading_pairs LIMIT 1")
