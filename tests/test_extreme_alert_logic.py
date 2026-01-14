@@ -86,9 +86,9 @@ def run_test():
     try:
         setup_test_data()
         
-        logger.info("Running ExtremeAlertMonitor in dry-run mode...")
-        # Run with dry_run=True so we don't spam Telegram, but we see the log output
-        monitor = ExtremeAlertMonitor(lookback_minutes=60, dry_run=True)
+        logger.info("Running ExtremeAlertMonitor in REAL mode (sending alert)...")
+        # Run with dry_run=False to test actual Telegram delivery
+        monitor = ExtremeAlertMonitor(lookback_minutes=60, dry_run=False)
         monitor.connect()
         
         # Manually call find method to verify
