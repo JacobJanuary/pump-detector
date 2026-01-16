@@ -75,10 +75,18 @@ class ExtremeAlertMonitor:
     def find_double_extreme_signals(self) -> List[Dict]:
         """
         Find pairs with EXTREME signals on both Spot and Futures
-        for the same candle timestamp, detected recently.
+        for the LAST (most recent) 4h candle only.
         """
         try:
+            # First, find the latest signal_timestamp (the last 4h candle that was processed)
+            # Then check if there are EXTREME signals for both SPOT and FUTURES at that timestamp
             query = """
+                WITH latest_candle AS (
+                    -- Find the most recent signal_timestamp (last 4h candle)
+                    SELECT MAX(signal_timestamp) as last_candle_time
+                    FROM pump.raw_signals
+                    WHERE detected_at >= NOW() - INTERVAL '%s minutes'
+                )
                 SELECT
                     s_spot.pair_symbol,
                     s_spot.signal_timestamp,
@@ -92,24 +100,23 @@ class ExtremeAlertMonitor:
                 JOIN pump.raw_signals s_futures 
                     ON s_spot.pair_symbol = s_futures.pair_symbol 
                     AND s_spot.signal_timestamp = s_futures.signal_timestamp
+                CROSS JOIN latest_candle lc
                 WHERE s_spot.signal_type = 'SPOT'
                   AND s_futures.signal_type = 'FUTURES'
                   AND s_spot.signal_strength = 'EXTREME'
                   AND s_futures.signal_strength = 'EXTREME'
-                  -- Check if either signal was detected recently
-                  AND (
-                      s_spot.detected_at >= NOW() - INTERVAL '%s minutes'
-                      OR
-                      s_futures.detected_at >= NOW() - INTERVAL '%s minutes'
-                  )
+                  -- Only check the LAST 4h candle
+                  AND s_spot.signal_timestamp = lc.last_candle_time
             """
             
             with self.db.conn.cursor() as cur:
-                # Execute with lookback parameter twice
-                cur.execute(query, (self.lookback_minutes, self.lookback_minutes))
+                cur.execute(query, (self.lookback_minutes,))
                 results = cur.fetchall()
 
-            logger.info(f"Found {len(results)} potential Double EXTREME signals")
+            if results:
+                logger.info(f"Found {len(results)} Double EXTREME signals on LAST 4h candle")
+            else:
+                logger.info("No Double EXTREME signals on the last 4h candle")
             return results
 
         except Exception as e:
